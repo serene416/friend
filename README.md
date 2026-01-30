@@ -1,50 +1,58 @@
-# Welcome to your Expo app 👋
+# What are we doing today? (우리 오늘 뭐 해?)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Friends' Activity Recommendation App specialized for group gatherings and trending spots.
 
-## Get started
+## Project Structure
 
-1. Install dependencies
+- **`friend/`**: React Native (Expo) Client Application.
+- **`backend/`**: FastAPI Backend Server (Gateway & Core Logic).
+- **`worker/`**: Celery + Playwright Worker for data gathering.
+- **`ai/`**: GPU-accelerated AI Service for trend analysis.
+- **`docker-compose.yml`**: Infrastructure orchestration (Postgres, Redis, MongoDB, Services).
 
-   ```bash
-   npm install
-   ```
+## Getting Started
 
-2. Start the app
+### Prerequisites
 
-   ```bash
-   npx expo start
-   ```
+- **Docker & Docker Compose**: For running backend services and databases.
+- **Node.js & npm/yarn**: For running the frontend client.
+- **Expo Go App**: To run the mobile app on a physical device.
 
-In the output, you'll find options to open the app in a
+### 1. Backend & Infrastructure (Docker)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+To start the databases, backend, worker, and AI service:
 
 ```bash
-npm run reset-project
+# Build and start all services
+docker-compose up --build
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Access the Backend API docs at: `http://localhost:8000/docs`
 
-## Learn more
+### 2. Frontend (React Native)
 
-To learn more about developing your project with Expo, look at the following resources:
+To run the mobile application:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+cd friend
+npm install  # Install dependencies (first time only)
+npx expo start
+```
 
-## Join the community
+- Press `i` to open in iOS Simulator (Mac only).
+- Press `a` to open in Android Emulator.
+- Scan the QR code with the **Expo Go** app on your phone.
 
-Join our community of developers creating universal apps.
+## Security Note (GPU Server)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The AI Service is configured to run in a secure environment with limited ports (22, 80). It uses a **Polling** mechanism:
+- It connects to the internal PostgreSQL DB.
+- Polls the `aitask` table for `PENDING` tasks using `SELECT ... FOR UPDATE SKIP LOCKED`.
+- This ensures no direct external access to the GPU worker is required.
+
+## Tech Stack
+
+- **Frontend**: React Native, Expo Router, Zustand
+- **Backend**: FastAPI, SQLModel, AsyncPG
+- **Database**: PostgreSQL (PostGIS), MongoDB, Redis
+- **Infra**: Docker, Nginx (planned)
