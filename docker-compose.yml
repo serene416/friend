@@ -4,13 +4,14 @@ services:
   # Database Layer
   db:
     image: postgis/postgis:15-3.3
+    platform: linux/amd64
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-main_db}
     ports:
-      - "5432:5432"
+      - "5440:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +27,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -39,7 +40,7 @@ services:
     image: redis:7.0-alpine
     restart: always
     ports:
-      - "6379:6379"
+      - "6381:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -99,14 +100,8 @@ services:
     build:
       context: ./ai
       dockerfile: Dockerfile
+    platform: linux/amd64
     restart: always
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-main_db}

@@ -14,7 +14,13 @@ async def lifespan(app: FastAPI):
     # Shutdown: Disconnect DBs
     print("Shutting down...")
 
+from app.routers import auth, friends, recommendation
+
 app = FastAPI(title="Our Today Activity API", lifespan=lifespan)
+
+app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+app.include_router(friends.router, prefix="/friends", tags=["Friends"])
+app.include_router(recommendation.router, prefix="/recommend", tags=["Recommendation"])
 
 @app.get("/")
 async def root():
