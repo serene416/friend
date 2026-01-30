@@ -1,12 +1,57 @@
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
+import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Friend, MOCK_USER } from '../../constants/data';
 import { useFriendStore } from '../../store/useFriendStore';
-import { MOCK_USER } from '../../constants/data';
 
 export default function MyPageScreen() {
     const { friends, removeFriend } = useFriendStore();
 
-    const renderFriend = ({ item }) => (
+    // --- 카카오 친구 목록 불러오기 (구현 가이드) ---
+    const handleAddFriend = async () => {
+        Alert.alert('친구 추가', '카카오톡 친구 목록 API를 호출합니다.');
+
+        /*
+        [카카오 친구 목록 API 연결 방법]
+
+        1. 권한 확인: 
+           이 기능을 사용하려면 로그인 시 'friends' 스코프 권한을 동의받아야 합니다.
+           (login.tsx의 scopes 배열에 'friends' 추가 필요)
+
+        2. 액세스 토큰 필요:
+           로그인 성공 시 받은 Access Token이 필요합니다. 
+           (보통 AsyncStorage나 Context에 저장해둔 것을 가져옵니다.)
+
+        3. API 호출 예시 코드:
+        
+        try {
+            const token = await AsyncStorage.getItem('userToken'); // 토큰 가져오기
+            
+            const response = await fetch('https://kapi.kakao.com/v1/api/talk/friends', {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token}`, // 중요: Bearer 띄어쓰기 주의
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+                },
+            });
+
+            const data = await response.json();
+            
+            if (data.elements) {
+                // data.elements가 친구 목록 배열입니다.
+                // 여기서 useFriendStore의 addFriend 등을 사용하여 상태를 업데이트하세요.
+                console.log('친구 목록:', data.elements);
+            } else {
+                console.log('친구 목록을 불러오지 못했습니다:', data);
+            }
+
+        } catch (error) {
+            console.error('API 호출 실패:', error);
+            Alert.alert('오류', '친구 목록을 불러오는데 실패했습니다.');
+        }
+        */
+    };
+
+    const renderFriend = ({ item }: { item: Friend }) => (
         <View style={styles.friendItem}>
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
             <View style={styles.friendInfo}>
@@ -36,8 +81,8 @@ export default function MyPageScreen() {
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>My Friends</Text>
-                    <TouchableOpacity>
-                        <Text style={styles.addButton}>+ Add Friend</Text>
+                    <TouchableOpacity onPress={handleAddFriend}>
+                        <Text style={styles.addButton}>+ 친구 추가</Text>
                     </TouchableOpacity>
                 </View>
                 <FlatList

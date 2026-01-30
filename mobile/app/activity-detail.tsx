@@ -1,3 +1,4 @@
+import { MOCK_ACTIVITIES } from "@/constants/data";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -10,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MOCK_ACTIVITIES } from "../../constants/data";
 
 const { width } = Dimensions.get("window");
 
