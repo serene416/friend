@@ -4,10 +4,11 @@ Friends' Activity Recommendation App specialized for group gatherings and trendi
 
 ## Project Structure
 
-- **`friend/`**: React Native (Expo) Client Application.
+- **`mobile/`**: React Native (Expo) Client Application.
 - **`backend/`**: FastAPI Backend Server (Gateway & Core Logic).
 - **`worker/`**: Celery + Playwright Worker for data gathering.
 - **`ai/`**: GPU-accelerated AI Service for trend analysis.
+- **`infra/`**: Infrastructure configurations.
 - **`docker-compose.yml`**: Infrastructure orchestration (Postgres, Redis, MongoDB, Services).
 
 ## Getting Started
@@ -27,14 +28,17 @@ To start the databases, backend, worker, and AI service:
 docker-compose up --build
 ```
 
-Access the Backend API docs at: `http://localhost:8000/docs`
+- **Backend API**: `http://localhost:8000/docs`
+- **PostgreSQL**: `localhost:5440`
+- **Redis**: `localhost:6381`
+- **MongoDB**: `localhost:27018`
 
 ### 2. Frontend (React Native)
 
 To run the mobile application:
 
 ```bash
-cd friend
+cd mobile
 npm install  # Install dependencies (first time only)
 npx expo start
 ```
