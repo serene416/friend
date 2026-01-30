@@ -9,14 +9,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import FriendSelector from "../../components/FriendSelector";
-import { MOCK_ACTIVITIES } from "../../constants/data";
+import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
 
 export default function HomeScreen() {
   const router = useRouter();
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item }: { item: Activity }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push(`/(tabs)/activity-detail?id=${item.id}`)}
+      onPress={() => router.push(`/activity-detail?id=${item.id}`)}
     >
       <Image source={{ uri: item.image }} style={styles.cardImage} />
       <View style={styles.cardContent}>
