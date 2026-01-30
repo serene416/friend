@@ -42,7 +42,7 @@ class RecommendationService:
                 distance_meters=round(distance, 1),
                 score=round(score, 1),
                 congestion_level=congestion,
-                image_url=place.metadata.get("image_url") if place.metadata else None
+                image_url=place.place_metadata.get("image_url") if place.place_metadata else None
             ))
             
         # Sort by score desc

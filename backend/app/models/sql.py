@@ -31,9 +31,10 @@ class UserGroupLink(SQLModel, table=True):
 # User Model
 class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    firebase_uid: str = Field(unique=True, index=True)
+    kakao_id: str = Field(unique=True, index=True)
     email: Optional[str] = None
-    name: str
+    nickname: str
+    profile_image: Optional[str] = None
     preference_vector: List[float] = Field(default=[], sa_column=Column(ARRAY(Float)))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -58,9 +59,11 @@ class Place(SQLModel, table=True):
     
     address: str
     category: str
+    kakao_place_id: Optional[str] = Field(default=None, index=True)
+
     trend_score: float = Field(default=0.0)
     capacity: Optional[int] = None
-    metadata: dict = Field(default={}, sa_column=Column(JSONB))
+    place_metadata: dict = Field(default={}, sa_column=Column(JSONB)) # Kept for other metadata
 
 # Group Model
 class Group(SQLModel, table=True):
