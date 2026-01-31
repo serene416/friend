@@ -12,7 +12,7 @@ const REDIRECT_URI = 'http://localhost:8081/auth/kakao/callback'; // Dummy URI f
 // For Android Emulator use 'http://10.0.2.2:8000'
 // For iOS Simulator use 'http://localhost:8000'
 // For Physical Device, use your computer's LAN IP (e.g. 10.249.xx.xx)
-const BACKEND_URL = 'http://10.249.79.38:8000'; // Updated to match Expo IP from logs
+const BACKEND_URL = 'http://10.249.79.38:8000'; // Forced to user-specified working IP
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -79,26 +79,26 @@ export default function LoginScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
-                <Text style={styles.title}>Welcome</Text>
-                <Text style={styles.subtitle}>Sign in to start exploring</Text>
+                <Text style={styles.title}>환영합니다</Text>
+                <Text style={styles.subtitle}>로그인하여 시작해보세요</Text>
 
                 <TouchableOpacity
                     style={[styles.button, styles.kakaoButton]}
                     onPress={() => setIsWebViewVisible(true)}
                 >
-                    <Text style={[styles.buttonText, { color: '#000' }]}>Login with Kakao</Text>
+                    <Text style={[styles.buttonText, { color: '#000' }]}>카카오로 로그인하기</Text>
                 </TouchableOpacity>
-
-                {/* Debug Info in Dev */}
-                <Text style={{ fontSize: 10, color: 'gray', marginTop: 10 }}>
-                    Redirect URI: {REDIRECT_URI}
-                </Text>
             </View>
 
             <View style={styles.footer}>
                 <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-                    <Text style={styles.skipText}>Skip for now</Text>
+                    <Text style={styles.skipText}>다음에 하기</Text>
                 </TouchableOpacity>
+
+                {/* Debug Info in Dev */}
+                <Text style={styles.debugText}>
+                    Redirect URI: {REDIRECT_URI}
+                </Text>
             </View>
 
             {/* Kakao Login WebView Modal */}
@@ -112,7 +112,7 @@ export default function LoginScreen() {
                         style={styles.closeButton}
                         onPress={() => setIsWebViewVisible(false)}
                     >
-                        <Text style={styles.closeButtonText}>Close</Text>
+                        <Text style={styles.closeButtonText}>닫기</Text>
                     </TouchableOpacity>
                     <WebView
                         source={{
@@ -157,11 +157,11 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fff', justifyContent: 'center', padding: 20 },
     content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    title: { fontSize: 32, fontWeight: 'bold', marginBottom: 10 },
-    subtitle: { fontSize: 16, color: '#666', marginBottom: 40 },
-    footer: { marginBottom: 30 },
+    title: { fontFamily: 'Pretendard-Bold', fontSize: 32, marginBottom: 10 },
+    subtitle: { fontFamily: 'Pretendard-Medium', fontSize: 16, color: '#666', marginBottom: 40 },
+    footer: { marginBottom: 30, alignItems: 'center' },
     skipButton: { padding: 15, alignItems: 'center' },
-    skipText: { color: '#666', fontSize: 14 },
+    skipText: { fontFamily: 'Pretendard-Medium', color: '#666', fontSize: 14 },
     button: {
         width: '100%',
         padding: 15,
@@ -173,8 +173,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#FEE500', // Kakao Yellow
     },
     buttonText: {
+        fontFamily: 'Pretendard-Bold',
         fontSize: 16,
-        fontWeight: 'bold',
     },
     closeButton: {
         padding: 10,
@@ -182,8 +182,15 @@ const styles = StyleSheet.create({
         backgroundColor: '#f0f0f0'
     },
     closeButtonText: {
+        fontFamily: 'Pretendard-Bold',
         fontSize: 16,
         color: '#007AFF',
-        fontWeight: 'bold'
+    },
+    debugText: {
+        fontFamily: 'Pretendard-Medium',
+        fontSize: 10,
+        color: 'gray',
+        marginTop: 5,
+        textAlign: 'center'
     }
 });
