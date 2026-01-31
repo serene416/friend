@@ -1,9 +1,12 @@
 import httpx
+import logging
 from fastapi import HTTPException, status
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.sql import User
 from app.schemas.auth import KakaoAuthResponse
+
+logger = logging.getLogger("app.auth")
 
 class AuthService:
     KAKAO_TOKEN_INFO_URL = "https://kapi.kakao.com/v1/user/access_token_info"
@@ -21,11 +24,17 @@ class AuthService:
                     headers={"Authorization": f"Bearer {access_token}"}
                 )
                 if response.status_code != 200:
+                    logger.warning(
+                        "Kakao token verify failed: status=%s body=%s",
+                        response.status_code,
+                        response.text[:200],
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="Invalid Kakao access token"
                     )
             except httpx.RequestError:
+                logger.exception("Failed to connect to Kakao token info API")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Failed to connect to Kakao API"
@@ -42,12 +51,18 @@ class AuthService:
                     headers={"Authorization": f"Bearer {access_token}"}
                 )
                 if response.status_code != 200:
+                    logger.warning(
+                        "Kakao user info failed: status=%s body=%s",
+                        response.status_code,
+                        response.text[:200],
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="Failed to fetch Kakao user info"
                     )
                 return response.json()
             except httpx.RequestError:
+                logger.exception("Failed to connect to Kakao user info API")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Failed to connect to Kakao API"
