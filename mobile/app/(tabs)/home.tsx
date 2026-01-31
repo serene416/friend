@@ -76,18 +76,18 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", paddingHorizontal: 20 },
   header: { marginTop: 10, marginBottom: 20 },
-  headerTitle: { fontSize: 24, fontWeight: "bold" },
+  headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
   weatherCard: {
     backgroundColor: "#eef",
     padding: 15,
     borderRadius: 12,
     marginBottom: 20,
   },
-  weatherTemp: { fontSize: 28, fontWeight: "bold", color: "#333" },
-  weatherDesc: { fontSize: 16, color: "#666" },
+  weatherTemp: { fontSize: 28, fontFamily: "Pretendard-Bold", color: "#333" },
+  weatherDesc: { fontSize: 16, color: "#666", fontFamily: "Pretendard-Medium" },
   selectorContainer: { marginBottom: 25 },
   sectionHeader: { marginBottom: 15 },
-  sectionTitle: { fontSize: 20, fontWeight: "bold" },
+  sectionTitle: { fontSize: 20, fontFamily: "Pretendard-Bold" },
   listContent: { paddingBottom: 20 },
   card: {
     backgroundColor: "#fff",
@@ -107,9 +107,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#eee",
   },
   cardContent: { padding: 15 },
-  cardTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 8 },
+  cardTitle: { fontSize: 18, fontFamily: "Pretendard-Bold", marginBottom: 8 },
   cardMeta: { flexDirection: "row", marginBottom: 10 },
-  metaText: { fontSize: 14, color: "#666", marginRight: 5 },
+  metaText: { fontSize: 14, color: "#666", marginRight: 5, fontFamily: "Pretendard-Medium" },
   tags: { flexDirection: "row" },
   tag: {
     backgroundColor: "#f0f0f0",
@@ -118,5 +118,5 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: 8,
   },
-  tagText: { fontSize: 12, color: "#555" },
+  tagText: { fontSize: 12, color: "#555", fontFamily: "Pretendard-Medium" },
 });

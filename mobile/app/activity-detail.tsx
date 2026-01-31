@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: "bold",
+    fontFamily: "Pretendard-Bold",
     marginBottom: 16,
     color: "#333",
   },
@@ -186,6 +186,7 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 14,
     color: "#666",
+    fontFamily: "Pretendard-Medium",
   },
   tagsContainer: {
     flexDirection: "row",
@@ -202,14 +203,14 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 12,
     color: "#555",
-    fontWeight: "500",
+    fontFamily: "Pretendard-Bold",
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontFamily: "Pretendard-Bold",
     marginBottom: 12,
     color: "#333",
   },
@@ -217,6 +218,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     lineHeight: 22,
+    fontFamily: "Pretendard-Medium",
   },
   highlightItem: {
     flexDirection: "row",
@@ -228,6 +230,7 @@ const styles = StyleSheet.create({
   highlightText: {
     fontSize: 14,
     color: "#555",
+    fontFamily: "Pretendard-Medium",
   },
   mapPlaceholder: {
     width: "100%",
@@ -244,7 +247,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#999",
     marginTop: 16,
-    fontWeight: "500",
+    fontFamily: "Pretendard-Bold",
   },
   mapPlaceholderSubtext: {
     fontSize: 12,
@@ -252,6 +255,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     paddingHorizontal: 20,
+    fontFamily: "Pretendard-Medium",
   },
   ctaButton: {
     backgroundColor: "#333",
@@ -263,7 +267,7 @@ const styles = StyleSheet.create({
   },
   ctaButtonText: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontFamily: "Pretendard-Bold",
     color: "#fff",
   },
 });
