@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function PermissionScreen() {
@@ -14,17 +14,17 @@ export default function PermissionScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.card}>
-                <Text style={styles.title}>Enable Location</Text>
+                <Text style={styles.title}>위치 권한 허용</Text>
                 <Text style={styles.desc}>
-                    We need your location to recommend activities near you and your friends.
+                    내 주변과 친구들 사이의 최적의 장소를 추천하기 위해 위치 권한이 필요합니다.
                 </Text>
 
                 <TouchableOpacity style={styles.allowButton} onPress={handleAllow}>
-                    <Text style={styles.buttonText}>Allow Access</Text>
+                    <Text style={styles.buttonText}>권한 허용</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.denyButton} onPress={handleAllow}>
-                    <Text style={styles.denyText}>Not Now</Text>
+                    <Text style={styles.denyText}>나중에 하기</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
