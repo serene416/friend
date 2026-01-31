@@ -41,3 +41,49 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv/
+
+# Python Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Python Distribution / Build
+*.egg-info/
+build/
+dist/
+*.manifest
+*.spec
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# Logs
+*.log
+
+
+# System
+._*
+Thumbs.db
+

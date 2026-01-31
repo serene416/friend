@@ -1,16 +1,17 @@
 import { create } from 'zustand';
 
 interface User {
-    id: string;
+    id: string; // our backend user_id
+    kakao_id: string;
     nickname: string;
-    avatar?: string;
+    profile_image?: string;
 }
 
 interface AuthState {
     user: User | null;
-    accessToken: string | null;
+    accessToken: string | null; // Kakao Access Token
     isAuthenticated: boolean;
-    login: (user: any, token: string) => void;
+    login: (user: User, token: string) => void;
     logout: () => void;
 }
 

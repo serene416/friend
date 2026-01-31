@@ -1,0 +1,34 @@
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function TabLayout() {
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { paddingBottom: 5, paddingTop: 5, height: 60 },
+        tabBarActiveTintColor: '#333',
+        tabBarInactiveTintColor: '#999',
+      }}
+    >
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="mypage"
+        options={{
+          title: 'My Page',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person" size={size} color={color} />
+          ),
+        }}
+      />
+    </Tabs>
+  );
+}

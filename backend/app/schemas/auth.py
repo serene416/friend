@@ -12,19 +12,23 @@ class TokenData(BaseModel):
     user_id: Optional[UUID] = None
 
 # Auth Schemas
-class GoogleLoginRequest(BaseModel):
-    id_token: str
-    # Optional fields for mock/dev
-    email: Optional[EmailStr] = None
-    name: Optional[str] = None
-    photo_url: Optional[str] = None
+class KakaoAuthRequest(BaseModel):
+    kakao_access_token: str
+    nickname: str
+
+class KakaoAuthResponse(BaseModel):
+    user_id: UUID
+    kakao_id: str
+    nickname: str
+    is_new_user: bool
+    access_token: Optional[str] = None # Optional for future JWT integration
 
 # User Schemas
 class UserResponse(BaseModel):
     id: UUID
     email: Optional[str]
-    name: str
-    firebase_uid: str
+    nickname: str
+    profile_image: Optional[str] = None
     preference_vector: List[float] = []
 
     class Config:

@@ -2,6 +2,7 @@
   "expo": {
     "name": "myapp",
     "slug": "myapp",
+    "owner": "appletree30",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
