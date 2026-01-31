@@ -1,10 +1,59 @@
+import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Friend, MOCK_USER } from '../../constants/data';
+import { Friend } from '../../constants/data';
+import { useAuthStore } from '../../store/useAuthStore';
 import { useFriendStore } from '../../store/useFriendStore';
 
 export default function MyPageScreen() {
+    const router = useRouter();
+    const { user, logout } = useAuthStore();
     const { friends, removeFriend } = useFriendStore();
+    const [locationName, setLocationName] = useState('위치 정보를 불러오는 중...');
+
+    useEffect(() => {
+        let subscription: Location.LocationSubscription | null = null;
+
+        (async () => {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                setLocationName('위치 권한 필요');
+                return;
+            }
+
+            try {
+                subscription = await Location.watchPositionAsync(
+                    {
+                        accuracy: Location.Accuracy.Balanced,
+                        distanceInterval: 100, // Update every 100 meters
+                    },
+                    async (location) => {
+                        let geocode = await Location.reverseGeocodeAsync({
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                        });
+
+                        if (geocode.length > 0) {
+                            const place = geocode[0];
+                            const name = `${place.region || ''} ${place.city || ''} ${place.district || ''}`.trim();
+                            setLocationName(name || '위치를 알 수 없음');
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error('Location Error:', error);
+                setLocationName('위치 정보를 가져올 수 없습니다');
+            }
+        })();
+
+        return () => {
+            if (subscription) {
+                subscription.remove();
+            }
+        };
+    }, []);
 
     // --- 카카오 친구 목록 불러오기 (구현 가이드) ---
     const handleAddFriend = async () => {
@@ -14,7 +63,14 @@ export default function MyPageScreen() {
     const handleLogout = () => {
         Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
             { text: '취소', style: 'cancel' },
-            { text: '로그아웃', style: 'destructive', onPress: () => console.log('Logged out') },
+            {
+                text: '로그아웃',
+                style: 'destructive',
+                onPress: () => {
+                    logout();
+                    router.replace('/(onboarding)/login');
+                }
+            },
         ]);
     };
 
@@ -37,10 +93,13 @@ export default function MyPageScreen() {
         <SafeAreaView style={styles.container}>
             {/* Profile Section */}
             <View style={styles.profileHeader}>
-                <Image source={{ uri: MOCK_USER.avatar }} style={styles.profileAvatar} />
+                <Image
+                    source={{ uri: user?.avatar || 'https://i.pravatar.cc/150?u=fallback' }}
+                    style={styles.profileAvatar}
+                />
                 <View>
-                    <Text style={styles.profileName}>{MOCK_USER.name}</Text>
-                    <Text style={styles.profileLocation}>{MOCK_USER.location}</Text>
+                    <Text style={styles.profileName}>{user?.nickname || '사용자'}</Text>
+                    <Text style={styles.profileLocation}>{locationName}</Text>
                 </View>
             </View>
 

@@ -45,6 +45,7 @@ export default function LoginScreen() {
             });
 
             const nickname = profileResponse.data.properties?.nickname || profileResponse.data.kakao_account?.profile?.nickname || 'Unknown';
+            const avatar = profileResponse.data.properties?.thumbnail_image || profileResponse.data.kakao_account?.profile?.thumbnail_image_url || null;
 
             // 3. Send Token to Backend
             const backendResponse = await axios.post(`${BACKEND_URL}/api/v1/auth/kakao`, {
@@ -54,7 +55,9 @@ export default function LoginScreen() {
 
             if (backendResponse.status === 200) {
                 const userData = backendResponse.data;
-                login(userData, access_token);
+                // Merge avatar if backend doesn't provide it
+                const finalUser = { ...userData, avatar: userData.avatar || avatar, nickname: userData.nickname || nickname };
+                login(finalUser, access_token);
                 // Navigate to Main App (Home Tab)
                 // @ts-ignore - Valid route in Expo Router
                 router.replace('/home');

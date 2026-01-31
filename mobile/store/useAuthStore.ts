@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 
-interface User {
+export interface User {
     id: string; // our backend user_id
-    kakao_id: string;
+    kakao_id?: string;
     nickname: string;
-    profile_image?: string;
+    avatar?: string;
 }
 
 interface AuthState {
