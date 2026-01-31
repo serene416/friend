@@ -1,6 +1,7 @@
 import httpx
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.sql import User
 from app.schemas.auth import KakaoAuthResponse
 
@@ -52,7 +53,7 @@ class AuthService:
                     detail="Failed to connect to Kakao API"
                 )
 
-    async def authenticate_kakao(self, session: Session, access_token: str, nickname: str) -> KakaoAuthResponse:
+    async def authenticate_kakao(self, session: AsyncSession, access_token: str, nickname: str) -> KakaoAuthResponse:
         """
         Main entry point for Kakao authentication.
         Verifies token, fetches info, syncs with DB, and returns response.
@@ -74,7 +75,8 @@ class AuthService:
         # 3. DB Sync
         # Check if user exists
         statement = select(User).where(User.kakao_id == kakao_id)
-        user = session.exec(statement).first()
+        result = await session.execute(statement)
+        user = result.scalars().first()
         is_new_user = False
 
         if not user:
@@ -82,9 +84,7 @@ class AuthService:
             is_new_user = True
             user = User(
                 kakao_id=kakao_id,
-                nickname=nickname, # Use the nickname provided by client or from Kakao? 
-                                   # User request says: "POST request body has nickname", so use that.
-                                   # But also "sync with DB... if exists update nickname".
+                nickname=nickname,
             )
             session.add(user)
         else:
@@ -93,8 +93,8 @@ class AuthService:
                 user.nickname = nickname
                 session.add(user)
         
-        session.commit()
-        session.refresh(user)
+        await session.commit()
+        await session.refresh(user)
 
         return KakaoAuthResponse(
             user_id=user.id,

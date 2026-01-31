@@ -55,9 +55,9 @@ export default function LoginScreen() {
             if (backendResponse.status === 200) {
                 const userData = backendResponse.data;
                 login(userData, access_token);
-                // Navigate to Main App
+                // Navigate to Main App (Home Tab)
                 // @ts-ignore - Valid route in Expo Router
-                router.replace('/(tabs)');
+                router.replace('/home');
             }
 
         } catch (e: any) {
