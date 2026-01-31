@@ -8,11 +8,11 @@ import { WebView } from 'react-native-webview';
 const KAKAO_JS_KEY = '8723438c42d292525222427c14337829'; // User provided key
 const REDIRECT_URI = 'http://localhost:8081/auth/kakao/callback'; // Dummy URI for interception
 
-// Configure Backend URL - Update this with your actual machine IP if testing on device
+// Configure Backend URL
+// Prefer EXPO_PUBLIC_BACKEND_URL if set; fallback to ngrok domain for device testing
 // For Android Emulator use 'http://10.0.2.2:8000'
 // For iOS Simulator use 'http://localhost:8000'
-// For Physical Device, use your computer's LAN IP (e.g. 10.249.xx.xx)
-const BACKEND_URL = 'http://10.249.79.38:8000'; // Forced to user-specified working IP
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://playwithme.ngrok.app';
 
 export default function LoginScreen() {
     const router = useRouter();
