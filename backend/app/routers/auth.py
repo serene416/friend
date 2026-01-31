@@ -1,22 +1,24 @@
-from fastapi import APIRouter, Depends
-from app.schemas.auth import KakaoLoginRequest, UserResponse, Token
-from app.services.auth_service import AuthService
+from fastapi import APIRouter
+from app.schemas.auth import UserResponse, KakaoAuthRequest, KakaoAuthResponse
 from app.api.deps import SessionDep
+from app.services.auth_service import auth_service
 
 router = APIRouter()
-auth_service = AuthService()
 
-@router.post("/kakao", response_model=UserResponse)
+@router.post("/kakao", response_model=KakaoAuthResponse)
 async def login_kakao(
-    login_data: KakaoLoginRequest,
+    request: KakaoAuthRequest,
     session: SessionDep
 ):
     """
-    Login with Kakao Access Token.
-    Returns User profile.
+    Kakao Login Endpoint.
+    Verifies Kakao access token and syncs user with DB.
     """
-    user = await auth_service.authenticate_kakao(session, login_data)
-    return user
+    return await auth_service.authenticate_kakao(
+        session=session,
+        access_token=request.kakao_access_token,
+        nickname=request.nickname
+    )
 
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(
@@ -34,6 +36,5 @@ async def read_users_me(
         id="00000000-0000-0000-0000-000000000000",
         email="mock@example.com",
         nickname="Mock User",
-        kakao_id="mock_kakao_id",
         profile_image=""
     )

@@ -1,61 +1,107 @@
-from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
+import httpx
+from fastapi import HTTPException, status
+from sqlmodel import Session, select
 from app.models.sql import User
-from app.schemas.auth import KakaoLoginRequest, UserResponse
-import uuid
+from app.schemas.auth import KakaoAuthResponse
 
 class AuthService:
-    async def authenticate_kakao(self, session: AsyncSession, login_data: KakaoLoginRequest) -> User:
-        # 1. Verify access_token with Kakao API
-        # https://kapi.kakao.com/v2/user/me
-        
-        headers = {
-            "Authorization": f"Bearer {login_data.kakao_access_token}",
-            "Content-type": "application/x-www-form-urlencoded;charset=utf-8"
-        }
-        
-        # We use requests here as it is synchronous, but for high performance async context 
-        # we might want to use httpx in the future. For now, following requirements.
-        import requests
-        try:
-             response = requests.get("https://kapi.kakao.com/v2/user/me", headers=headers)
-             response.raise_for_status()
-             kakao_user_info = response.json()
-             kakao_id = str(kakao_user_info.get("id"))
-             properties = kakao_user_info.get("properties", {})
-             nickname = properties.get("nickname", login_data.nickname or "Unknown User")
-             profile_image = properties.get("profile_image", login_data.profile_image)
-             
-        except Exception as e:
-            # Fallback for dev/mock if token is invalid or network fails (only if needed)
-            # For now, we assume strict validation. 
-            # If dev mode is needed, we could allow bypassing.
-            # print(f"Kakao Auth Failed: {e}")
-            raise ValueError("Invalid Kakao Access Token")
+    KAKAO_TOKEN_INFO_URL = "https://kapi.kakao.com/v1/user/access_token_info"
+    KAKAO_USER_INFO_URL = "https://kapi.kakao.com/v2/user/me"
 
-        # 2. Check if user exists
+    async def verify_kakao_token(self, access_token: str) -> None:
+        """
+        Verify the Kakao access token.
+        Raises 401 Unauthorized if invalid.
+        """
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    self.KAKAO_TOKEN_INFO_URL,
+                    headers={"Authorization": f"Bearer {access_token}"}
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid Kakao access token"
+                    )
+            except httpx.RequestError:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Failed to connect to Kakao API"
+                )
+
+    async def get_kakao_user_info(self, access_token: str) -> dict:
+        """
+        Fetch user information from Kakao.
+        """
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    self.KAKAO_USER_INFO_URL,
+                    headers={"Authorization": f"Bearer {access_token}"}
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Failed to fetch Kakao user info"
+                    )
+                return response.json()
+            except httpx.RequestError:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Failed to connect to Kakao API"
+                )
+
+    async def authenticate_kakao(self, session: Session, access_token: str, nickname: str) -> KakaoAuthResponse:
+        """
+        Main entry point for Kakao authentication.
+        Verifies token, fetches info, syncs with DB, and returns response.
+        """
+        # 1. Verify Token
+        await self.verify_kakao_token(access_token)
+
+        # 2. Get User Info
+        # We need the unique Kakao ID (id) to identify the user
+        user_info = await self.get_kakao_user_info(access_token)
+        kakao_id = str(user_info.get("id"))
+
+        if not kakao_id:
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Kakao ID not found in user info"
+            )
+
+        # 3. DB Sync
+        # Check if user exists
         statement = select(User).where(User.kakao_id == kakao_id)
-        result = await session.execute(statement)
-        user = result.scalar_one_or_none()
-        
+        user = session.exec(statement).first()
+        is_new_user = False
+
         if not user:
-            # 3. Create new user
+            # Create new user
+            is_new_user = True
             user = User(
                 kakao_id=kakao_id,
-                nickname=nickname,
-                profile_image=profile_image,
-                preference_vector=[0.0] * 5 # Init 5-dim vector
+                nickname=nickname, # Use the nickname provided by client or from Kakao? 
+                                   # User request says: "POST request body has nickname", so use that.
+                                   # But also "sync with DB... if exists update nickname".
             )
             session.add(user)
-            await session.commit()
-            await session.refresh(user)
         else:
-            # Update info if changed
-            if user.nickname != nickname or user.profile_image != profile_image:
+            # Update existing user
+            if user.nickname != nickname:
                 user.nickname = nickname
-                user.profile_image = profile_image
                 session.add(user)
-                await session.commit()
-                await session.refresh(user)
-            
-        return user
+        
+        session.commit()
+        session.refresh(user)
+
+        return KakaoAuthResponse(
+            user_id=user.id,
+            kakao_id=user.kakao_id,
+            nickname=user.nickname,
+            is_new_user=is_new_user,
+            access_token=access_token # Optionally return the same token
+        )
+
+auth_service = AuthService()

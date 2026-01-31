@@ -31,11 +31,11 @@ class UserGroupLink(SQLModel, table=True):
 # User Model
 class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    kakao_id: str = Field(unique=True, index=True)
     email: Optional[str] = None
     nickname: str
     profile_image: Optional[str] = None
     preference_vector: List[float] = Field(default=[], sa_column=Column(ARRAY(Float)))
+    kakao_id: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"unique": True})
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     groups: List["Group"] = Relationship(back_populates="members", link_model=UserGroupLink)

@@ -12,18 +12,22 @@ class TokenData(BaseModel):
     user_id: Optional[UUID] = None
 
 # Auth Schemas
-# Auth Schemas
-class KakaoLoginRequest(BaseModel):
+class KakaoAuthRequest(BaseModel):
     kakao_access_token: str
-    nickname: Optional[str] = None
-    profile_image: Optional[str] = None
+    nickname: str
+
+class KakaoAuthResponse(BaseModel):
+    user_id: UUID
+    kakao_id: str
+    nickname: str
+    is_new_user: bool
+    access_token: Optional[str] = None # Optional for future JWT integration
 
 # User Schemas
 class UserResponse(BaseModel):
     id: UUID
     email: Optional[str]
     nickname: str
-    kakao_id: str
     profile_image: Optional[str] = None
     preference_vector: List[float] = []
 
