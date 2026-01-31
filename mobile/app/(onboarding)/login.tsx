@@ -1,9 +1,9 @@
+import { useAuthStore } from '@/store/useAuthStore';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Modal, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { useAuthStore } from '../../store/useAuthStore';
 
 const KAKAO_JS_KEY = '8723438c42d292525222427c14337829'; // User provided key
 const REDIRECT_URI = 'http://localhost:8081/auth/kakao/callback'; // Dummy URI for interception
