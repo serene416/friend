@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   header: { marginTop: 10, marginBottom: 20 },
   headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
   weatherCard: {
-    backgroundColor: "#eef",
+    backgroundColor: "#fff0f3", // Light pink color
     padding: 15,
     borderRadius: 12,
     marginBottom: 20,
