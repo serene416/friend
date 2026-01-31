@@ -43,13 +43,13 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>What are we doing today?</Text>
+        <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
       </View>
 
       {/* Weather Widget (Mock) */}
       <View style={styles.weatherCard}>
         <Text style={styles.weatherTemp}>12°C</Text>
-        <Text style={styles.weatherDesc}>Sunny • Good for walking</Text>
+        <Text style={styles.weatherDesc}>맑음 • 산책하기 딱 좋은 날씨</Text>
       </View>
 
       {/* Friend Selector */}
@@ -59,7 +59,7 @@ export default function HomeScreen() {
 
       {/* Recommendations */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Today's Recommendations</Text>
+        <Text style={styles.sectionTitle}>오늘의 추천 활동</Text>
       </View>
 
       <FlatList
