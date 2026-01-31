@@ -1,3 +1,4 @@
+import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -74,6 +75,14 @@ export default function MyPageScreen() {
         ]);
     };
 
+    const handleContact = () => {
+        const email = 'support@example.com'; // 사용자님의 이메일로 바꾸세요!
+        const subject = '[우리 오늘 뭐 해?] 문의사항';
+        const body = '여기에 문의 내용을 적어주세요.';
+
+        Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    };
+
     const renderFriend = ({ item }: { item: Friend }) => (
         <View style={styles.friendItem}>
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -128,6 +137,9 @@ export default function MyPageScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.settingItem}>
                     <Text style={styles.settingText}>위치 서비스</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.settingItem} onPress={handleContact}>
+                    <Text style={styles.settingText}>문의하기</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
