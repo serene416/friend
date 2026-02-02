@@ -12,12 +12,26 @@ import FriendSelector from "../../components/FriendSelector";
 import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
 import { useCurrentWeather } from "../../hooks/useCurrentWeather";
 
+const WEATHER_ICONS: Record<string, any> = {
+  '맑음': require('../../assets/weather/sun.png'),
+  '구름많음': require('../../assets/weather/cloudy_sun.png'),
+  '흐림': require('../../assets/weather/cloudy.png'),
+  '눈': require('../../assets/weather/snow.png'),
+  '비': require('../../assets/weather/cloudy.png'), // Fallback for rain if not provided
+  'default': require('../../assets/weather/sun.png'),
+};
+
 export default function HomeScreen() {
   const router = useRouter();
   const { data, loading, error, permissionDenied } = useCurrentWeather();
 
+  const getWeatherIcon = (status: string) => {
+    return WEATHER_ICONS[status] || WEATHER_ICONS['default'];
+  };
+
   const formatValue = (value: number | null, suffix: string) =>
     value === null ? "-" : `${value}${suffix}`;
+
   const renderItem = ({ item }: { item: Activity }) => (
     <TouchableOpacity
       style={styles.card}
@@ -51,7 +65,7 @@ export default function HomeScreen() {
         <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
       </View>
 
-      {/* Weather Widget (Mock) */}
+      {/* Weather Widget */}
       <View style={styles.weatherCard}>
         {loading && (
           <Text style={styles.weatherDesc}>날씨 불러오는 중...</Text>
@@ -65,29 +79,26 @@ export default function HomeScreen() {
           <Text style={styles.weatherDesc}>날씨 오류: {error}</Text>
         )}
         {!loading && !permissionDenied && !error && data && (
-          <View>
-            <View style={styles.weatherMainRow}>
+          <View style={styles.weatherContainer}>
+            <View style={styles.weatherInfo}>
               <Text style={styles.weatherTemp}>
-                {formatValue(data.temperature, "°C")}
+                {formatValue(data.temperature, "°")}
               </Text>
-              <Text style={styles.weatherDesc}>{data.precipitationType}</Text>
+              <Text style={styles.weatherStatus}>{data.precipitationType}</Text>
+              <View style={styles.weatherSubInfo}>
+                <Text style={styles.weatherDetailText}>
+                  습도 {formatValue(data.humidity, "%")}
+                </Text>
+                <Text style={styles.weatherDetailText}>
+                  강수량 {data.precipitation1h}
+                </Text>
+              </View>
             </View>
-            <View style={styles.weatherDetailRow}>
-              <Text style={styles.weatherDetailText}>
-                습도 {formatValue(data.humidity, "%")}
-              </Text>
-              <Text style={styles.weatherDetailText}>
-                풍속 {formatValue(data.windSpeed, "m/s")}
-              </Text>
-            </View>
-            <View style={styles.weatherDetailRow}>
-              <Text style={styles.weatherDetailText}>
-                강수량 {data.precipitation1h}
-              </Text>
-              <Text style={styles.weatherDetailText}>
-                풍향 {data.windDirection ?? "-"}
-              </Text>
-            </View>
+            <Image
+              source={getWeatherIcon(data.precipitationType)}
+              style={styles.weatherIcon}
+              resizeMode="contain"
+            />
           </View>
         )}
       </View>
@@ -118,27 +129,43 @@ const styles = StyleSheet.create({
   header: { marginTop: 10, marginBottom: 20 },
   headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
   weatherCard: {
-    backgroundColor: "#fff0f3", // Light pink color
-    padding: 15,
-    borderRadius: 12,
+    backgroundColor: "#fff0f3", // Back to original light pink
+    padding: 24,
+    borderRadius: 24,
     marginBottom: 20,
   },
-  weatherTemp: { fontSize: 28, fontFamily: "Pretendard-Bold", color: "#333" },
-  weatherDesc: { fontSize: 16, color: "#666", fontFamily: "Pretendard-Medium" },
-  weatherMainRow: {
+  weatherContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  weatherInfo: {
+    flex: 1,
+  },
+  weatherTemp: {
+    fontSize: 48,
+    fontFamily: "Pretendard-Bold",
+    color: "#1A1A1A",
+    lineHeight: 56,
+  },
+  weatherStatus: {
+    fontSize: 18,
+    color: "#4A4A4A",
+    fontFamily: "Pretendard-SemiBold",
     marginBottom: 8,
   },
-  weatherDetailRow: {
+  weatherSubInfo: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 4,
+    gap: 12,
   },
+  weatherIcon: {
+    width: 100,
+    height: 100,
+  },
+  weatherDesc: { fontSize: 16, color: "#666", fontFamily: "Pretendard-Medium" },
   weatherDetailText: {
     fontSize: 14,
-    color: "#555",
+    color: "#7A7A7A",
     fontFamily: "Pretendard-Medium",
   },
   selectorContainer: { marginBottom: 25 },
