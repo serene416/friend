@@ -287,6 +287,9 @@ export default function MyPageScreen() {
             {/* Settings Section */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>설정</Text>
+                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/favorites')}>
+                    <Text style={styles.settingText}>관심 목록</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.settingItem}>
                     <Text style={styles.settingText}>앱 설정</Text>
                 </TouchableOpacity>
