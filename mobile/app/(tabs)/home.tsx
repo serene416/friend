@@ -21,6 +21,25 @@ const WEATHER_ICONS: Record<string, any> = {
   'default': require('../../assets/weather/sun.png'),
 };
 
+const WEATHER_THEMES: Record<string, { bg: string, text: string, border?: string }> = {
+  '맑음': { bg: '#81CFEF', text: '#FFFFFF', border: '#FFB2C3' },
+  '구름많음': { bg: '#A8D8EA', text: '#FFFFFF' },
+  '흐림': { bg: '#90AFC5', text: '#FFFFFF' },
+  '눈': { bg: '#F8B1C0', text: '#FFFFFF' },
+  '비': { bg: '#7692AD', text: '#FFFFFF' },
+  'default': { bg: '#fff0f3', text: '#1A1A1A' },
+};
+
+
+const WEATHER_BG_IMAGES: Record<string, any> = {
+  '맑음': require('../../assets/weather/sun_bg.png'),
+  '구름많음': require('../../assets/weather/cloudy_sun_bg.png'),
+  '흐림': require('../../assets/weather/cloudy_bg.png'),
+  '눈': require('../../assets/weather/snow_bg.png'),
+  '비': require('../../assets/weather/rain_bg.png'), // Added rain background
+  'default': require('../../assets/weather/sun_bg.png'),
+};
+
 export default function HomeScreen() {
   const router = useRouter();
   const { data, loading, error, permissionDenied } = useCurrentWeather();
@@ -28,6 +47,12 @@ export default function HomeScreen() {
   const getWeatherIcon = (status: string) => {
     return WEATHER_ICONS[status] || WEATHER_ICONS['default'];
   };
+
+  const getWeatherBackground = (status: string) => {
+    return WEATHER_BG_IMAGES[status] || WEATHER_BG_IMAGES['default'];
+  };
+
+  const currentTheme = data ? (WEATHER_THEMES[data.precipitationType] || WEATHER_THEMES['default']) : WEATHER_THEMES['default'];
 
   const formatValue = (value: number | null, suffix: string) =>
     value === null ? "-" : `${value}${suffix}`;
@@ -74,41 +99,56 @@ export default function HomeScreen() {
             </View>
 
             {/* Weather Widget */}
-            <View style={styles.weatherCard}>
-              {loading && (
-                <Text style={styles.weatherDesc}>날씨 불러오는 중...</Text>
-              )}
-              {!loading && permissionDenied && (
-                <Text style={styles.weatherDesc}>
-                  위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.
-                </Text>
-              )}
-              {!loading && !permissionDenied && error && (
-                <Text style={styles.weatherDesc}>날씨 오류: {error}</Text>
-              )}
-              {!loading && !permissionDenied && !error && data && (
-                <View style={styles.weatherContainer}>
-                  <View style={styles.weatherInfo}>
-                    <Text style={styles.weatherTemp}>
-                      {formatValue(data.temperature, "°")}
-                    </Text>
-                    <Text style={styles.weatherStatus}>{data.precipitationType}</Text>
-                    <View style={styles.weatherSubInfo}>
-                      <Text style={styles.weatherDetailText}>
-                        습도 {formatValue(data.humidity, "%")}
+            <View style={[
+              styles.weatherCard,
+              // Background color is now handled by ImageBackground (fallback logic if needed can be added, but image covers it)
+              currentTheme.border ? { borderWidth: 3, borderColor: currentTheme.border } : null
+            ]}>
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24, overflow: 'hidden' }}>
+                <Image
+                  source={data ? getWeatherBackground(data.precipitationType) : WEATHER_BG_IMAGES['default']}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              </View>
+
+              {/* Content Overlay */}
+              <View style={{ zIndex: 1 }}>
+                {loading && (
+                  <Text style={[styles.weatherDesc, { color: currentTheme.text }]}>날씨 불러오는 중...</Text>
+                )}
+                {!loading && permissionDenied && (
+                  <Text style={[styles.weatherDesc, { color: currentTheme.text }]}>
+                    위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.
+                  </Text>
+                )}
+                {!loading && !permissionDenied && error && (
+                  <Text style={[styles.weatherDesc, { color: currentTheme.text }]}>날씨 오류: {error}</Text>
+                )}
+                {!loading && !permissionDenied && !error && data && (
+                  <View style={styles.weatherContainer}>
+                    <View style={styles.weatherInfo}>
+                      <Text style={[styles.weatherTemp, { color: currentTheme.text }]}>
+                        {formatValue(data.temperature, "°")}
                       </Text>
-                      <Text style={styles.weatherDetailText}>
-                        강수량 {data.precipitation1h}
-                      </Text>
+                      <Text style={[styles.weatherStatus, { color: currentTheme.text }]}>{data.precipitationType}</Text>
+                      <View style={styles.weatherSubInfo}>
+                        <Text style={[styles.weatherDetailText, { color: currentTheme.text, opacity: 0.9 }]}>
+                          습도 {formatValue(data.humidity, "%")}
+                        </Text>
+                        <Text style={[styles.weatherDetailText, { color: currentTheme.text, opacity: 0.9 }]}>
+                          강수량 {data.precipitation1h}
+                        </Text>
+                      </View>
                     </View>
+                    <Image
+                      source={getWeatherIcon(data.precipitationType)}
+                      style={styles.weatherIcon}
+                      resizeMode="contain"
+                    />
                   </View>
-                  <Image
-                    source={getWeatherIcon(data.precipitationType)}
-                    style={styles.weatherIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-              )}
+                )}
+              </View>
             </View>
 
             {/* Friend Selector */}
@@ -146,10 +186,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weatherTemp: {
-    fontSize: 40,
+    fontSize: 56,
     fontFamily: "Pretendard-Bold",
-    color: "#1A1A1A",
-    lineHeight: 48,
+    lineHeight: 64,
   },
   weatherStatus: {
     fontSize: 16,
