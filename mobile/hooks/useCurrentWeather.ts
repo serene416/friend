@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Location from "expo-location";
+import { getUltraSrtFcstBaseDateTimeKst } from "./getUltraSrtFcstBaseDateTimeKst";
 
 type WeatherData = {
   temperature: number | null;
   humidity: number | null;
   windSpeed: number | null;
   precipitationType: string;
+  skyLabel: string | null;
+  weatherLabel: string;
   precipitation1h: string;
   windDirection: string | null;
   baseDate: string;
@@ -41,6 +44,12 @@ const PTY_LABELS: Record<string, string> = {
   "7": "눈날림",
 };
 
+const SKY_LABELS: Record<string, string> = {
+  "1": "맑음",
+  "3": "구름많음",
+  "4": "흐림",
+};
+
 const WIND_DIRECTIONS = [
   "북",
   "북북동",
@@ -67,6 +76,21 @@ const toNumber = (value: string | null | undefined) => {
 };
 
 const formatTwoDigits = (value: number) => value.toString().padStart(2, "0");
+
+const maskSecret = (value: string) => {
+  if (!value) return "";
+  if (value.length <= 8) return "****";
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+};
+
+const maskServiceKeyInUrl = (url: string, serviceKey: string) => {
+  if (!serviceKey) return url;
+  const masked = maskSecret(serviceKey);
+  const encodedServiceKey = encodeURIComponent(serviceKey);
+  return url
+    .replaceAll(serviceKey, masked)
+    .replaceAll(encodedServiceKey, masked);
+};
 
 const withTimeout = async <T>(
   promise: Promise<T>,
@@ -112,10 +136,13 @@ const getBaseDateTimeKst = (now: Date) => {
 };
 
 const getServiceKeyParam = (rawKey: string) => {
-  if (!rawKey) return "";
-  const hasEncodedToken = /%[0-9A-Fa-f]{2}/.test(rawKey);
-  if (hasEncodedToken) return rawKey;
-  return encodeURIComponent(rawKey);
+  const trimmed = rawKey.trim();
+  if (!trimmed) return "";
+  try {
+    return decodeURIComponent(trimmed);
+  } catch {
+    return trimmed;
+  }
 };
 
 const clampLongitude = (value: number) => {
@@ -167,6 +194,100 @@ const degreesToDirection = (degrees: number) => {
   const normalized = ((degrees % 360) + 360) % 360;
   const index = Math.round(normalized / 22.5) % 16;
   return WIND_DIRECTIONS[index];
+};
+
+const getKstDateTime = (now: Date) => {
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
+  const kstMs = utcMs + 9 * 60 * 60 * 1000;
+  const kstDate = new Date(kstMs);
+  const year = kstDate.getUTCFullYear();
+  const month = kstDate.getUTCMonth() + 1;
+  const day = kstDate.getUTCDate();
+  const hour = kstDate.getUTCHours();
+  const minute = kstDate.getUTCMinutes();
+
+  return {
+    date: `${year}${formatTwoDigits(month)}${formatTwoDigits(day)}`,
+    time: `${formatTwoDigits(hour)}${formatTwoDigits(minute)}`,
+  };
+};
+
+const selectSkyValueForNow = (
+  items: Array<{ category: string; fcstDate: string; fcstTime: string; fcstValue: string }>,
+  nowDate: string,
+  nowTime: string,
+) => {
+  const todayItems = items.filter((item) => item.fcstDate === nowDate);
+  if (todayItems.length === 0) return null;
+
+  const sortedTimes = Array.from(
+    new Set(todayItems.map((item) => item.fcstTime)),
+  ).sort((a, b) => Number(a) - Number(b));
+
+  if (sortedTimes.length === 0) return null;
+
+  const targetTime =
+    sortedTimes.find((time) => Number(time) >= Number(nowTime)) ??
+    sortedTimes[sortedTimes.length - 1];
+
+  return (
+    todayItems.find(
+      (item) => item.fcstTime === targetTime && item.category === "SKY",
+    )?.fcstValue ?? null
+  );
+};
+
+const buildKmaRequestUrl = (
+  baseUrl: string,
+  endpoint: "getUltraSrtNcst" | "getUltraSrtFcst",
+  params: {
+    serviceKey: string;
+    numOfRows: number;
+    pageNo: number;
+    baseDate: string;
+    baseTime: string;
+    nx: number;
+    ny: number;
+  },
+) => {
+  const url = new URL(`${baseUrl}/${endpoint}`);
+  url.searchParams.set("serviceKey", params.serviceKey);
+  url.searchParams.set("dataType", "JSON");
+  url.searchParams.set("_type", "json");
+  url.searchParams.set("numOfRows", String(params.numOfRows));
+  url.searchParams.set("pageNo", String(params.pageNo));
+  url.searchParams.set("base_date", params.baseDate);
+  url.searchParams.set("base_time", params.baseTime);
+  url.searchParams.set("nx", String(params.nx));
+  url.searchParams.set("ny", String(params.ny));
+  return url.toString();
+};
+
+const extractXmlMessage = (text: string) => {
+  const authMsg = text.match(/<returnAuthMsg>([^<]+)<\/returnAuthMsg>/)?.[1];
+  if (authMsg) return authMsg;
+  const resultMsg = text.match(/<resultMsg>([^<]+)<\/resultMsg>/)?.[1];
+  if (resultMsg) return resultMsg;
+  return null;
+};
+
+const parseKmaJson = (
+  responseText: string,
+  parseErrorMessage: string,
+) => {
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    const trimmed = responseText.trim();
+    if (trimmed.startsWith("<")) {
+      const xmlMessage = extractXmlMessage(trimmed);
+      if (xmlMessage) {
+        throw new Error(`기상청 API 오류: ${xmlMessage}`);
+      }
+      throw new Error("기상청 API가 JSON 대신 XML 응답을 반환했습니다.");
+    }
+    throw new Error(parseErrorMessage);
+  }
 };
 
 export const useCurrentWeather = (): WeatherState => {
@@ -230,29 +351,32 @@ export const useCurrentWeather = (): WeatherState => {
         throw new Error("API 설정이 누락되었습니다.");
       }
 
-      const { baseDate, baseTime } = getBaseDateTimeKst(new Date());
-      const requestUrl =
-        `${baseUrl}/getUltraSrtNcst` +
-        `?serviceKey=${serviceKey}` +
-        "&dataType=JSON" +
-        "&numOfRows=100" +
-        "&pageNo=1" +
-        `&base_date=${baseDate}` +
-        `&base_time=${baseTime}` +
-        `&nx=${nx}` +
-        `&ny=${ny}`;
+      const nowDate = new Date();
+      const { baseDate, baseTime } = getBaseDateTimeKst(nowDate);
+      const ncstRequestUrl = buildKmaRequestUrl(baseUrl, "getUltraSrtNcst", {
+        serviceKey,
+        numOfRows: 100,
+        pageNo: 1,
+        baseDate,
+        baseTime,
+        nx,
+        ny,
+      });
 
-      console.log("[weather] requestUrl", requestUrl);
-      const response = await withTimeout(fetch(requestUrl), 10000, "fetch");
+      console.log(
+        "[weather] ncst requestUrl",
+        maskServiceKeyInUrl(ncstRequestUrl, serviceKey),
+      );
+      const response = await withTimeout(fetch(ncstRequestUrl), 10000, "fetch");
       const responseText = await response.text();
       let json: any;
       try {
-        json = JSON.parse(responseText);
+        json = parseKmaJson(responseText, "JSON 파싱 실패: 응답이 JSON이 아닙니다.");
       } catch (parseError) {
         console.log("[weather] response status", response.status);
         console.log("[weather] response headers", response.headers);
         console.log("[weather] response text (first 300)", responseText.slice(0, 300));
-        throw new Error("JSON 파싱 실패: 응답이 JSON이 아닙니다.");
+        throw parseError;
       }
       const header = json?.response?.header;
 
@@ -281,18 +405,96 @@ export const useCurrentWeather = (): WeatherState => {
       const vec = toNumber(findValue("VEC"));
 
       const precipitationType = PTY_LABELS[pty ?? ""] || "알수없음";
+      let skyLabel: string | null = null;
+
+      try {
+        const { baseDate: fcstBaseDate, baseTime: fcstBaseTime } =
+          getUltraSrtFcstBaseDateTimeKst(nowDate);
+        const fcstRequestUrl = buildKmaRequestUrl(baseUrl, "getUltraSrtFcst", {
+          serviceKey,
+          numOfRows: 1000,
+          pageNo: 1,
+          baseDate: fcstBaseDate,
+          baseTime: fcstBaseTime,
+          nx,
+          ny,
+        });
+
+        console.log(
+          "[weather] fcst requestUrl",
+          maskServiceKeyInUrl(fcstRequestUrl, serviceKey),
+        );
+
+        const fcstResponse = await withTimeout(
+          fetch(fcstRequestUrl),
+          10000,
+          "fetch-fcst",
+        );
+        const fcstResponseText = await fcstResponse.text();
+        let fcstJson: any;
+
+        try {
+          fcstJson = parseKmaJson(
+            fcstResponseText,
+            "예보 JSON 파싱 실패: 응답이 JSON이 아닙니다.",
+          );
+        } catch (parseError) {
+          console.log("[weather] fcst response status", fcstResponse.status);
+          console.log("[weather] fcst response headers", fcstResponse.headers);
+          console.log(
+            "[weather] fcst response text (first 300)",
+            fcstResponseText.slice(0, 300),
+          );
+          throw parseError;
+        }
+
+        const fcstHeader = fcstJson?.response?.header;
+        if (!fcstHeader || fcstHeader.resultCode !== "00") {
+          console.log("[weather] fcst response header", fcstHeader);
+          console.log("[weather] fcst response body", fcstJson?.response?.body);
+          throw new Error(fcstHeader?.resultMsg || "예보 응답이 올바르지 않습니다.");
+        }
+
+        const fcstItems = fcstJson?.response?.body?.items?.item as
+          | Array<{
+            category: string;
+            fcstDate: string;
+            fcstTime: string;
+            fcstValue: string;
+          }>
+          | undefined;
+
+        if (!fcstItems || fcstItems.length === 0) {
+          throw new Error("예보 데이터가 비어 있습니다.");
+        }
+
+        const { date: nowKstDate, time: nowKstTime } = getKstDateTime(nowDate);
+        const skyValue = selectSkyValueForNow(fcstItems, nowKstDate, nowKstTime);
+        skyLabel = skyValue ? SKY_LABELS[skyValue] || "알수없음" : null;
+      } catch (forecastError) {
+        console.log(
+          "[weather] fcst warning",
+          forecastError instanceof Error
+            ? forecastError.message
+            : "예보 조회 중 오류가 발생했습니다.",
+        );
+      }
+
       const rn1Number = toNumber(rn1Value);
       const precipitation1h =
         rn1Number === null || rn1Number === 0
           ? "강수없음"
           : `${rn1Number}mm`;
       const windDirection = vec === null ? null : degreesToDirection(vec);
+      const weatherLabel = pty === "0" ? skyLabel || "알수없음" : precipitationType;
 
       const weatherData: WeatherData = {
         temperature,
         humidity,
         windSpeed,
         precipitationType,
+        skyLabel,
+        weatherLabel,
         precipitation1h,
         windDirection,
         baseDate,

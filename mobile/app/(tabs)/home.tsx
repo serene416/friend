@@ -37,7 +37,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const { data, loading, error, permissionDenied } = useCurrentWeather();
 
-
+  const isNoPrecipitation = data?.precipitationType === "없음";
+  const weatherStatusText = isNoPrecipitation
+    ? `현재 하늘: ${data?.skyLabel ?? data?.weatherLabel ?? "알수없음"}`
+    : data?.precipitationType ?? "알수없음";
 
   const getWeatherBackground = (status: string) => {
     return WEATHER_BG_IMAGES[status] || WEATHER_BG_IMAGES['default'];
@@ -122,7 +125,14 @@ export default function HomeScreen() {
                       <Text style={[styles.weatherTemp, { color: currentTheme.text }]}>
                         {formatValue(data.temperature, "°")}
                       </Text>
-                      <Text style={[styles.weatherStatus, { color: currentTheme.text }]}>{data.precipitationType}</Text>
+                      <Text style={[styles.weatherStatus, { color: currentTheme.text }]}>
+                        {weatherStatusText}
+                      </Text>
+                      {!isNoPrecipitation && data.weatherLabel !== data.precipitationType && (
+                        <Text style={[styles.weatherLabel, { color: currentTheme.text }]}>
+                          현재 하늘: {data.weatherLabel}
+                        </Text>
+                      )}
                       <View style={styles.weatherSubInfo}>
                         <Text style={[styles.weatherDetailText, { color: currentTheme.text, opacity: 0.9 }]}>
                           습도 {formatValue(data.humidity, "%")}
@@ -181,6 +191,11 @@ const styles = StyleSheet.create({
     color: "#4A4A4A",
     fontFamily: "Pretendard-Bold",
     marginBottom: 4,
+  },
+  weatherLabel: {
+    fontSize: 13,
+    fontFamily: "Pretendard-Medium",
+    marginBottom: 6,
   },
   weatherSubInfo: {
     flexDirection: "row",

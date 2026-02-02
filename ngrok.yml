@@ -4,3 +4,7 @@ tunnels:
     addr: 8000
     proto: http
     domain: playwithme.ngrok.app
+  frontend:
+    addr: 8081
+    proto: http
+    # domain: your-frontend.ngrok.app
