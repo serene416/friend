@@ -17,7 +17,8 @@ async def login_kakao(
     return await auth_service.authenticate_kakao(
         session=session,
         access_token=request.kakao_access_token,
-        nickname=request.nickname
+        nickname=request.nickname,
+        profile_image=request.profile_image,
     )
 
 @router.get("/me", response_model=UserResponse)

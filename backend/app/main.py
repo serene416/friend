@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from app.core.db import init_db
 from app.core.logging import configure_logging
 # Import models to register them with metadata
-from app.models.sql import User, Place, Friendship, Group, AITask
+from app.models.sql import User, Place, Friendship, Group, AITask, Invite
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: Disconnect DBs
     print("Shutting down...")
 
-from app.routers import auth, friends, recommendation
+from app.routers import auth, friends, recommendation, users
 
 configure_logging()
 logger = logging.getLogger("app")
@@ -27,6 +27,7 @@ app = FastAPI(title="Our Today Activity API", lifespan=lifespan)
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
 app.include_router(recommendation.router, prefix="/api/v1/recommend", tags=["Recommendation"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):

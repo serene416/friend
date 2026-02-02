@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from sqlmodel import SQLModel
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -33,6 +34,9 @@ async def init_db():
     async with engine.begin() as conn:
         # await conn.run_sync(SQLModel.metadata.drop_all) # WARNING: Dev only
         await conn.run_sync(SQLModel.metadata.create_all)
+        # Minimal migration for new user status fields (avoid manual reset in dev DB)
+        await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS status_message text'))
+        await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS status_message_expires_at timestamp'))
 
 # MongoDB Connection
 MONGO_USER = os.getenv("MONGO_USER", "admin")
