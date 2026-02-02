@@ -257,7 +257,7 @@ export default function MyPageScreen() {
             {/* Friend List Section */}
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>카카오톡 친구</Text>
+                    <Text style={styles.sectionTitle}> 친구 목록</Text>
                     <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
                         <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                     </TouchableOpacity>
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     friendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
     avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 15, backgroundColor: '#eee' },
     friendInfo: { flex: 1 },
-    friendName: { fontSize: 16, fontFamily: 'Pretendard-Bold' },
+    friendName: { fontSize: 16, fontFamily: 'Pretendard-Bold', marginBottom: 8 },
     friendStatus: { fontSize: 14, fontFamily: 'Pretendard-Medium' },
     deleteButton: { padding: 8, backgroundColor: '#fee', borderRadius: 8 },
     deleteText: { color: 'red', fontSize: 12, fontFamily: 'Pretendard-Bold' },

@@ -182,9 +182,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weatherTemp: {
-    fontSize: 56,
+    fontSize: 48,
     fontFamily: "Pretendard-Bold",
-    lineHeight: 64,
+    lineHeight: 56,
   },
   weatherStatus: {
     fontSize: 16,
