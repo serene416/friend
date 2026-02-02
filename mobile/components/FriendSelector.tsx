@@ -33,7 +33,7 @@ export default function FriendSelector() {
                                 const isSelected = selectedFriends.includes(item.id);
                                 return (
                                     <TouchableOpacity
-                                        style={[styles.item, isSelected && styles.selectedItem]}
+                                        style={styles.item}
                                         onPress={() => toggleFriendSelection(item.id)}
                                     >
                                         <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -65,13 +65,31 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     title: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
     closeText: { fontSize: 16, color: '#007AFF', fontFamily: 'Pretendard-Bold' },
-    item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
-    selectedItem: { backgroundColor: '#f9f9f9' },
-    avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12, backgroundColor: '#ddd' },
-    info: { flex: 1 },
-    name: { fontSize: 16, fontFamily: 'Pretendard-Bold' },
+    item: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        marginBottom: 12,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#eee',
+        backgroundColor: '#fff',
+        // Shadow for card effect
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    selectedItem: {
+        backgroundColor: '#F0F8FF', // Light blue tint
+        borderColor: '#007AFF', // Blue border for selected
+    },
+    avatar: { width: 44, height: 44, borderRadius: 22, marginRight: 14, backgroundColor: '#ddd' },
+    info: { flex: 1, paddingRight: 8 },
+    name: { fontSize: 16, fontFamily: 'Pretendard-Bold', marginBottom: 4 }, // Added spacing
     status: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium' },
     checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#ddd', justifyContent: 'center', alignItems: 'center' },
-    checked: { backgroundColor: '#333', borderColor: '#333' },
+    checked: { backgroundColor: '#007AFF', borderColor: '#007AFF' }, // Consistent blue theme
     checkMark: { color: '#fff', fontSize: 14, fontFamily: 'Pretendard-Bold' },
 });

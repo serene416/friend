@@ -10,7 +10,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import FriendSelector from "../../components/FriendSelector";
 import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
+
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useCurrentWeather } from "../../hooks/useCurrentWeather";
+import { useFavoriteStore } from "../../store/useFavoriteStore";
 
 
 
@@ -35,7 +38,9 @@ const WEATHER_BG_IMAGES: Record<string, any> = {
 
 export default function HomeScreen() {
   const router = useRouter();
+
   const { data, loading, error, permissionDenied } = useCurrentWeather();
+  const { toggleFavorite, isFavorite } = useFavoriteStore();
 
   const isNoPrecipitation = data?.precipitationType === "없음";
   const weatherStatusText = isNoPrecipitation
@@ -74,7 +79,19 @@ export default function HomeScreen() {
           ))}
         </View>
       </View>
-    </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.heartButton}
+        onPress={() => toggleFavorite(item.id)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <MaterialCommunityIcons
+          name={isFavorite(item.id) ? "heart" : "heart-outline"}
+          size={24}
+          color={isFavorite(item.id) ? "#FF4B4B" : "#666"}
+        />
+      </TouchableOpacity>
+    </TouchableOpacity >
   );
 
   return (
@@ -89,7 +106,7 @@ export default function HomeScreen() {
           <>
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
+              <Text style={styles.headerTitle}> 우리 오늘 뭐 해?</Text>
             </View>
 
             {/* Weather Widget */}
@@ -123,7 +140,7 @@ export default function HomeScreen() {
                   <View style={styles.weatherContainer}>
                     <View style={styles.weatherInfo}>
                       <Text style={[styles.weatherTemp, { color: currentTheme.text }]}>
-                        {formatValue(data.temperature, "°")}
+                        {formatValue(data.temperature, "°C")}
                       </Text>
                       <Text style={[styles.weatherStatus, { color: currentTheme.text }]}>
                         {weatherStatusText}
@@ -182,9 +199,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weatherTemp: {
-    fontSize: 56,
+    fontSize: 24,
     fontFamily: "Pretendard-Bold",
-    lineHeight: 64,
+    lineHeight: 32,
   },
   weatherStatus: {
     fontSize: 16,
@@ -229,7 +246,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#eee",
   },
   cardContent: { padding: 15 },
+
   cardTitle: { fontSize: 18, fontFamily: "Pretendard-Bold", marginBottom: 8 },
+  heartButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
   cardMeta: { flexDirection: "row", marginBottom: 10 },
   metaText: { fontSize: 14, color: "#666", marginRight: 5, fontFamily: "Pretendard-Medium" },
   tags: { flexDirection: "row" },

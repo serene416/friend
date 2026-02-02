@@ -197,6 +197,13 @@ export default function MyPageScreen() {
         }
     };
 
+    const handleDeleteFriend = (id: string) => {
+        Alert.alert('친구 삭제', '친구를 삭제하시겠습니까?', [
+            { text: '취소', style: 'cancel' },
+            { text: '삭제', style: 'destructive', onPress: () => removeFriend(id) },
+        ]);
+    };
+
     const renderFriend = ({ item }: { item: Friend }) => (
         <View style={styles.friendItem}>
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -206,7 +213,7 @@ export default function MyPageScreen() {
                     {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
                 </Text>
             </View>
-            <TouchableOpacity onPress={() => removeFriend(item.id)} style={styles.deleteButton}>
+            <TouchableOpacity onPress={() => handleDeleteFriend(item.id)} style={styles.deleteButton}>
                 <Text style={styles.deleteText}>삭제</Text>
             </TouchableOpacity>
         </View>
@@ -257,7 +264,7 @@ export default function MyPageScreen() {
             {/* Friend List Section */}
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>카카오톡 친구</Text>
+                    <Text style={styles.sectionTitle}> 친구 목록</Text>
                     <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
                         <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                     </TouchableOpacity>
@@ -280,6 +287,9 @@ export default function MyPageScreen() {
             {/* Settings Section */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>설정</Text>
+                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/favorites')}>
+                    <Text style={styles.settingText}>관심 목록</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.settingItem}>
                     <Text style={styles.settingText}>앱 설정</Text>
                 </TouchableOpacity>
@@ -317,7 +327,7 @@ const styles = StyleSheet.create({
     },
     profileAvatar: { width: 64, height: 64, borderRadius: 32, marginRight: 16, backgroundColor: '#f5f5f5' },
     profileTextContainer: { flex: 1 },
-    profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 2 },
+    profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 8 },
     profileLocation: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium', marginBottom: 4 },
     profileStatusText: { fontSize: 14, color: '#555', fontFamily: 'Pretendard-Medium', paddingVertical: 2 },
     statusInputContainer: { marginTop: 4 },
@@ -341,7 +351,7 @@ const styles = StyleSheet.create({
     friendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
     avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 15, backgroundColor: '#eee' },
     friendInfo: { flex: 1 },
-    friendName: { fontSize: 16, fontFamily: 'Pretendard-Bold' },
+    friendName: { fontSize: 16, fontFamily: 'Pretendard-Bold', marginBottom: 8 },
     friendStatus: { fontSize: 14, fontFamily: 'Pretendard-Medium' },
     deleteButton: { padding: 8, backgroundColor: '#fee', borderRadius: 8 },
     deleteText: { color: 'red', fontSize: 12, fontFamily: 'Pretendard-Bold' },
