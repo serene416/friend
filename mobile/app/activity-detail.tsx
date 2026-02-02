@@ -1,5 +1,6 @@
 import KakaoMap from "@/components/KakaoMap";
 import { MOCK_ACTIVITIES } from "@/constants/data";
+import { useFavoriteStore } from "@/store/useFavoriteStore";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -17,7 +18,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ActivityDetailScreen() {
   const router = useRouter();
+
   const { id } = useLocalSearchParams();
+  const activityId = typeof id === 'string' ? id : id?.[0] ?? '';
+  const { toggleFavorite, isFavorite } = useFavoriteStore();
+
   const [location, setLocation] = useState<{
     latitude: number;
     longitude: number;
@@ -102,11 +107,11 @@ export default function ActivityDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <MaterialCommunityIcons name="arrow-left" size={28} color="#333" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => toggleFavorite(activityId)}>
             <MaterialCommunityIcons
-              name="heart-outline"
+              name={isFavorite(activityId) ? "heart" : "heart-outline"}
               size={28}
-              color="#333"
+              color={isFavorite(activityId) ? "#FF4B4B" : "#333"}
             />
           </TouchableOpacity>
         </View>
