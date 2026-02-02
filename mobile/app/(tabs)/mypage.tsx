@@ -20,6 +20,7 @@ export default function MyPageScreen() {
     const [isLoadingFriends, setIsLoadingFriends] = useState(false);
     const [statusInput, setStatusInput] = useState(user?.statusMessage || '');
     const [isSavingStatus, setIsSavingStatus] = useState(false);
+    const [isEditingStatus, setIsEditingStatus] = useState(false);
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -188,6 +189,7 @@ export default function MyPageScreen() {
 
             updateStatusMessage(body?.message || '', body?.expires_at || null);
             await refreshFriends();
+            setIsEditingStatus(false);
         } catch (error: any) {
             Alert.alert('저장 실패', error?.message || '알 수 없는 오류가 발생했습니다.');
         } finally {
@@ -222,22 +224,32 @@ export default function MyPageScreen() {
                     <Text style={styles.profileName}>{user?.nickname || '사용자'}</Text>
                     <Text style={styles.profileLocation}>{locationName}</Text>
                     <View style={styles.statusInputContainer}>
-                        <View style={styles.statusRow}>
-                        <TextInput
-                            style={styles.statusInput}
-                            placeholder="상태 메시지를 입력하세요"
-                            value={statusInput}
-                            onChangeText={setStatusInput}
-                            returnKeyType="done"
-                        />
-                        <TouchableOpacity
-                            style={styles.statusSaveButton}
-                            onPress={handleStatusSubmit}
-                            disabled={isSavingStatus}
-                        >
-                            <Text style={styles.statusSaveText}>{isSavingStatus ? '저장중' : '저장'}</Text>
-                        </TouchableOpacity>
-                        </View>
+                        {!isEditingStatus ? (
+                            <TouchableOpacity onPress={() => setIsEditingStatus(true)}>
+                                <Text style={styles.profileStatusText}>
+                                    {user?.statusMessage || '상태 메시지를 입력하세요'}
+                                </Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.statusRow}>
+                                <TextInput
+                                    style={styles.statusInput}
+                                    placeholder="상태 메시지 입력"
+                                    value={statusInput}
+                                    onChangeText={setStatusInput}
+                                    autoFocus
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleStatusSubmit}
+                                />
+                                <TouchableOpacity
+                                    style={styles.statusSaveButton}
+                                    onPress={handleStatusSubmit}
+                                    disabled={isSavingStatus}
+                                >
+                                    <Text style={styles.statusSaveText}>{isSavingStatus ? '저장중' : '저장'}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 </View>
             </View>
@@ -247,7 +259,7 @@ export default function MyPageScreen() {
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>카카오톡 친구</Text>
                     <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
-                    <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
+                        <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                     </TouchableOpacity>
                 </View>
                 <FlatList
@@ -305,8 +317,10 @@ const styles = StyleSheet.create({
     },
     profileAvatar: { width: 64, height: 64, borderRadius: 32, marginRight: 16, backgroundColor: '#f5f5f5' },
     profileTextContainer: { flex: 1 },
-    profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 4 },
-    statusInputContainer: { marginTop: 8 },
+    profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 2 },
+    profileLocation: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium', marginBottom: 4 },
+    profileStatusText: { fontSize: 14, color: '#555', fontFamily: 'Pretendard-Medium', paddingVertical: 2 },
+    statusInputContainer: { marginTop: 4 },
     statusRow: { flexDirection: 'row', alignItems: 'center' },
     statusInput: {
         flex: 1,

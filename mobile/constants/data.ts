@@ -19,7 +19,7 @@ export const MOCK_USER = {
   id: 'u1',
   name: 'Me',
   avatar: 'https://i.pravatar.cc/150?u=u1',
-  statusMessage: '오늘도 즐겁게!',
+  location: 'Seoul, Gangnam',
 };
 
 export const MOCK_FRIENDS: Friend[] = [

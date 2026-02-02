@@ -12,22 +12,41 @@ import FriendSelector from "../../components/FriendSelector";
 import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
 import { useCurrentWeather } from "../../hooks/useCurrentWeather";
 
-const WEATHER_ICONS: Record<string, any> = {
-  '맑음': require('../../assets/weather/sun.png'),
-  '구름많음': require('../../assets/weather/cloudy_sun.png'),
-  '흐림': require('../../assets/weather/cloudy.png'),
-  '눈': require('../../assets/weather/snow.png'),
-  '비': require('../../assets/weather/cloudy.png'), // Fallback for rain if not provided
-  'default': require('../../assets/weather/sun.png'),
+
+
+const WEATHER_THEMES: Record<string, { bg: string, text: string, border?: string }> = {
+  '맑음': { bg: '#81CFEF', text: '#FFFFFF', border: '#FFB2C3' },
+  '구름많음': { bg: '#A8D8EA', text: '#FFFFFF' },
+  '흐림': { bg: '#90AFC5', text: '#FFFFFF' },
+  '눈': { bg: '#F8B1C0', text: '#FFFFFF' },
+  '비': { bg: '#7692AD', text: '#FFFFFF' },
+  'default': { bg: '#fff0f3', text: '#1A1A1A' },
+};
+
+
+const WEATHER_BG_IMAGES: Record<string, any> = {
+  '맑음': require('../../assets/weather/sun_bg.png'),
+  '구름많음': require('../../assets/weather/cloudy_sun_bg.png'),
+  '흐림': require('../../assets/weather/cloudy_bg.png'),
+  '눈': require('../../assets/weather/snow_bg.png'),
+  '비': require('../../assets/weather/rain_bg.png'), // Added rain background
+  'default': require('../../assets/weather/sun_bg.png'),
 };
 
 export default function HomeScreen() {
   const router = useRouter();
   const { data, loading, error, permissionDenied } = useCurrentWeather();
 
-  const getWeatherIcon = (status: string) => {
-    return WEATHER_ICONS[status] || WEATHER_ICONS['default'];
+  const isNoPrecipitation = data?.precipitationType === "없음";
+  const weatherStatusText = isNoPrecipitation
+    ? `현재 하늘: ${data?.skyLabel ?? data?.weatherLabel ?? "알수없음"}`
+    : data?.precipitationType ?? "알수없음";
+
+  const getWeatherBackground = (status: string) => {
+    return WEATHER_BG_IMAGES[status] || WEATHER_BG_IMAGES['default'];
   };
+
+  const currentTheme = data ? (WEATHER_THEMES[data.precipitationType] || WEATHER_THEMES['default']) : WEATHER_THEMES['default'];
 
   const formatValue = (value: number | null, suffix: string) =>
     value === null ? "-" : `${value}${suffix}`;
@@ -60,65 +79,86 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
-      </View>
-
-      {/* Weather Widget */}
-      <View style={styles.weatherCard}>
-        {loading && (
-          <Text style={styles.weatherDesc}>날씨 불러오는 중...</Text>
-        )}
-        {!loading && permissionDenied && (
-          <Text style={styles.weatherDesc}>
-            위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.
-          </Text>
-        )}
-        {!loading && !permissionDenied && error && (
-          <Text style={styles.weatherDesc}>날씨 오류: {error}</Text>
-        )}
-        {!loading && !permissionDenied && !error && data && (
-          <View style={styles.weatherContainer}>
-            <View style={styles.weatherInfo}>
-              <Text style={styles.weatherTemp}>
-                {formatValue(data.temperature, "°")}
-              </Text>
-              <Text style={styles.weatherStatus}>{data.precipitationType}</Text>
-              <View style={styles.weatherSubInfo}>
-                <Text style={styles.weatherDetailText}>
-                  습도 {formatValue(data.humidity, "%")}
-                </Text>
-                <Text style={styles.weatherDetailText}>
-                  강수량 {data.precipitation1h}
-                </Text>
-              </View>
-            </View>
-            <Image
-              source={getWeatherIcon(data.precipitationType)}
-              style={styles.weatherIcon}
-              resizeMode="contain"
-            />
-          </View>
-        )}
-      </View>
-
-      {/* Friend Selector */}
-      <View style={styles.selectorContainer}>
-        <FriendSelector />
-      </View>
-
-      {/* Recommendations */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>오늘의 추천 활동</Text>
-      </View>
-
       <FlatList
         data={MOCK_ACTIVITIES}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
+            </View>
+
+            {/* Weather Widget */}
+            <View style={[
+              styles.weatherCard,
+              // Background color is now handled by ImageBackground (fallback logic if needed can be added, but image covers it)
+              currentTheme.border ? { borderWidth: 3, borderColor: currentTheme.border } : null
+            ]}>
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24, overflow: 'hidden' }}>
+                <Image
+                  source={data ? getWeatherBackground(data.precipitationType) : WEATHER_BG_IMAGES['default']}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              </View>
+
+              {/* Content Overlay */}
+              <View style={{ zIndex: 1 }}>
+                {loading && (
+                  <Text style={[styles.weatherDesc, { color: currentTheme.text }]}>날씨 불러오는 중...</Text>
+                )}
+                {!loading && permissionDenied && (
+                  <Text style={[styles.weatherDesc, { color: currentTheme.text }]}>
+                    위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.
+                  </Text>
+                )}
+                {!loading && !permissionDenied && error && (
+                  <Text style={[styles.weatherDesc, { color: currentTheme.text }]}>날씨 오류: {error}</Text>
+                )}
+                {!loading && !permissionDenied && !error && data && (
+                  <View style={styles.weatherContainer}>
+                    <View style={styles.weatherInfo}>
+                      <Text style={[styles.weatherTemp, { color: currentTheme.text }]}>
+                        {formatValue(data.temperature, "°")}
+                      </Text>
+                      <Text style={[styles.weatherStatus, { color: currentTheme.text }]}>
+                        {weatherStatusText}
+                      </Text>
+                      {!isNoPrecipitation && data.weatherLabel !== data.precipitationType && (
+                        <Text style={[styles.weatherLabel, { color: currentTheme.text }]}>
+                          현재 하늘: {data.weatherLabel}
+                        </Text>
+                      )}
+                      <View style={styles.weatherSubInfo}>
+                        <Text style={[styles.weatherDetailText, { color: currentTheme.text, opacity: 0.9 }]}>
+                          습도 {formatValue(data.humidity, "%")}
+                        </Text>
+                        <Text style={[styles.weatherDetailText, { color: currentTheme.text, opacity: 0.9 }]}>
+                          강수량 {data.precipitation1h}
+                        </Text>
+                      </View>
+                    </View>
+                    {/* Icon is now part of the background image */}
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Friend Selector */}
+            <View style={styles.selectorContainer}>
+              <FriendSelector />
+            </View>
+
+            {/* Recommendations Title */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>오늘의 추천 활동</Text>
+            </View>
+          </>
+        }
       />
     </SafeAreaView>
   );
@@ -129,42 +169,41 @@ const styles = StyleSheet.create({
   header: { marginTop: 10, marginBottom: 20 },
   headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
   weatherCard: {
-    backgroundColor: "#fff0f3", // Back to original light pink
-    padding: 24,
+    backgroundColor: "#fff0f3",
+    padding: 16,
     borderRadius: 24,
     marginBottom: 20,
   },
   weatherContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
   },
   weatherInfo: {
     flex: 1,
   },
   weatherTemp: {
-    fontSize: 48,
+    fontSize: 56,
     fontFamily: "Pretendard-Bold",
-    color: "#1A1A1A",
-    lineHeight: 56,
+    lineHeight: 64,
   },
   weatherStatus: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#4A4A4A",
     fontFamily: "Pretendard-Bold",
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  weatherLabel: {
+    fontSize: 13,
+    fontFamily: "Pretendard-Medium",
+    marginBottom: 6,
   },
   weatherSubInfo: {
     flexDirection: "row",
     gap: 12,
   },
-  weatherIcon: {
-    width: 100,
-    height: 100,
-  },
-  weatherDesc: { fontSize: 16, color: "#666", fontFamily: "Pretendard-Medium" },
+  weatherDesc: { fontSize: 14, color: "#666", fontFamily: "Pretendard-Medium" },
   weatherDetailText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#7A7A7A",
     fontFamily: "Pretendard-Medium",
   },

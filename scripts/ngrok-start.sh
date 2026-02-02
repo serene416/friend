@@ -20,7 +20,7 @@ fi
 CONFIG_FLAGS+=(--config "./ngrok.yml")
 
 if [ -n "${NGROK_AUTHTOKEN:-}" ]; then
-  ngrok start --authtoken "$NGROK_AUTHTOKEN" "${CONFIG_FLAGS[@]}" backend
+  ngrok start --authtoken "$NGROK_AUTHTOKEN" "${CONFIG_FLAGS[@]}" backend frontend
 else
-  ngrok start "${CONFIG_FLAGS[@]}" backend
+  ngrok start "${CONFIG_FLAGS[@]}" backend frontend
 fi
