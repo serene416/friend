@@ -3,6 +3,10 @@ export interface Friend {
   name: string;
   avatar: string; // URL or placeholder
   statusMessage?: string;
+  locationName?: string;
+  latitude?: number;
+  longitude?: number;
+  locationUpdatedAt?: string;
 }
 
 export interface Activity {

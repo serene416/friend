@@ -42,6 +42,9 @@ export default function FriendSelector() {
                                             <Text style={styles.status}>
                                                 {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
                                             </Text>
+                                            <Text style={styles.location}>
+                                                {item.locationName ? item.locationName : '위치 정보가 없습니다.'}
+                                            </Text>
                                         </View>
                                         <View style={[styles.checkbox, isSelected && styles.checked]}>
                                             {isSelected && <Text style={styles.checkMark}>✓</Text>}
@@ -89,6 +92,7 @@ const styles = StyleSheet.create({
     info: { flex: 1, paddingRight: 8 },
     name: { fontSize: 16, fontFamily: 'Pretendard-Bold', marginBottom: 4 }, // Added spacing
     status: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium' },
+    location: { fontSize: 12, color: '#9a9a9a', fontFamily: 'Pretendard-Medium', marginTop: 2 },
     checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#ddd', justifyContent: 'center', alignItems: 'center' },
     checked: { backgroundColor: '#007AFF', borderColor: '#007AFF' }, // Consistent blue theme
     checkMark: { color: '#fff', fontSize: 14, fontFamily: 'Pretendard-Bold' },

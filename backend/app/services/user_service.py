@@ -29,5 +29,32 @@ class UserService:
             "expires_at": user.status_message_expires_at,
         }
 
+    async def set_current_location(
+        self,
+        session: AsyncSession,
+        user_id: UUID,
+        latitude: float,
+        longitude: float,
+        location_name: str | None = None,
+    ):
+        user = await session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.current_latitude = latitude
+        user.current_longitude = longitude
+        user.current_location_name = location_name.strip() if location_name else None
+        user.current_location_updated_at = datetime.utcnow()
+
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return {
+            "latitude": user.current_latitude,
+            "longitude": user.current_longitude,
+            "location_name": user.current_location_name,
+            "updated_at": user.current_location_updated_at,
+        }
+
 
 user_service = UserService()

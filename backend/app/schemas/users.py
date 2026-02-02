@@ -12,3 +12,17 @@ class StatusMessageRequest(BaseModel):
 class StatusMessageResponse(BaseModel):
     message: Optional[str] = None
     expires_at: Optional[datetime] = None
+
+
+class LocationUpdateRequest(BaseModel):
+    user_id: UUID
+    latitude: float
+    longitude: float
+    location_name: Optional[str] = None
+
+
+class LocationUpdateResponse(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_name: Optional[str] = None
+    updated_at: Optional[datetime] = None

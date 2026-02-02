@@ -37,6 +37,10 @@ async def init_db():
         # Minimal migration for new user status fields (avoid manual reset in dev DB)
         await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS status_message text'))
         await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS status_message_expires_at timestamp'))
+        await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS current_latitude double precision'))
+        await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS current_longitude double precision'))
+        await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS current_location_name text'))
+        await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS current_location_updated_at timestamp'))
 
 # MongoDB Connection
 MONGO_USER = os.getenv("MONGO_USER", "admin")

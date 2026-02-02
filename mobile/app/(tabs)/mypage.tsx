@@ -1,7 +1,7 @@
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, Image, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getBackendUrl } from '../../constants/api';
@@ -22,6 +22,44 @@ export default function MyPageScreen() {
     const [isSavingStatus, setIsSavingStatus] = useState(false);
     const [isEditingStatus, setIsEditingStatus] = useState(false);
     const [deletingFriendId, setDeletingFriendId] = useState<string | null>(null);
+    const lastSyncedLocationRef = useRef('');
+
+    useEffect(() => {
+        lastSyncedLocationRef.current = '';
+    }, [user?.id]);
+
+    const syncCurrentLocation = useCallback(
+        async (latitude: number, longitude: number, locationLabel?: string) => {
+            if (!user?.id) {
+                return;
+            }
+
+            const roundedKey = `${latitude.toFixed(4)}:${longitude.toFixed(4)}:${locationLabel || ''}`;
+            if (lastSyncedLocationRef.current === roundedKey) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/users/location`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: user.id,
+                        latitude,
+                        longitude,
+                        location_name: locationLabel || null,
+                    }),
+                });
+
+                if (response.ok) {
+                    lastSyncedLocationRef.current = roundedKey;
+                }
+            } catch (error) {
+                console.error('Location Sync Error:', error);
+            }
+        },
+        [user?.id]
+    );
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -40,15 +78,25 @@ export default function MyPageScreen() {
                         distanceInterval: 100, // Update every 100 meters
                     },
                     async (location) => {
-                        let geocode = await Location.reverseGeocodeAsync({
-                            latitude: location.coords.latitude,
-                            longitude: location.coords.longitude,
-                        });
+                        try {
+                            const latitude = location.coords.latitude;
+                            const longitude = location.coords.longitude;
+                            let resolvedName: string | undefined;
 
-                        if (geocode.length > 0) {
-                            const place = geocode[0];
-                            const name = `${place.region || ''} ${place.city || ''} ${place.district || ''}`.trim();
-                            setLocationName(name || '위치를 알 수 없음');
+                            const geocode = await Location.reverseGeocodeAsync({
+                                latitude,
+                                longitude,
+                            });
+
+                            if (geocode.length > 0) {
+                                const place = geocode[0];
+                                resolvedName = `${place.region || ''} ${place.city || ''} ${place.district || ''}`.trim() || undefined;
+                            }
+
+                            setLocationName(resolvedName || '위치를 알 수 없음');
+                            await syncCurrentLocation(latitude, longitude, resolvedName);
+                        } catch (error) {
+                            console.error('Location Watch Callback Error:', error);
                         }
                     }
                 );
@@ -63,7 +111,7 @@ export default function MyPageScreen() {
                 subscription.remove();
             }
         };
-    }, []);
+    }, [syncCurrentLocation]);
 
     const refreshFriends = useCallback(async () => {
         if (!user?.id) {
