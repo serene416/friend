@@ -10,9 +10,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import FriendSelector from "../../components/FriendSelector";
 import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
+import { useCurrentWeather } from "../../hooks/useCurrentWeather";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { data, loading, error, permissionDenied } = useCurrentWeather();
+
+  const formatValue = (value: number | null, suffix: string) =>
+    value === null ? "-" : `${value}${suffix}`;
   const renderItem = ({ item }: { item: Activity }) => (
     <TouchableOpacity
       style={styles.card}
@@ -48,8 +53,43 @@ export default function HomeScreen() {
 
       {/* Weather Widget (Mock) */}
       <View style={styles.weatherCard}>
-        <Text style={styles.weatherTemp}>12°C</Text>
-        <Text style={styles.weatherDesc}>맑음 • 산책하기 딱 좋은 날씨</Text>
+        {loading && (
+          <Text style={styles.weatherDesc}>날씨 불러오는 중...</Text>
+        )}
+        {!loading && permissionDenied && (
+          <Text style={styles.weatherDesc}>
+            위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.
+          </Text>
+        )}
+        {!loading && !permissionDenied && error && (
+          <Text style={styles.weatherDesc}>날씨 오류: {error}</Text>
+        )}
+        {!loading && !permissionDenied && !error && data && (
+          <View>
+            <View style={styles.weatherMainRow}>
+              <Text style={styles.weatherTemp}>
+                {formatValue(data.temperature, "°C")}
+              </Text>
+              <Text style={styles.weatherDesc}>{data.precipitationType}</Text>
+            </View>
+            <View style={styles.weatherDetailRow}>
+              <Text style={styles.weatherDetailText}>
+                습도 {formatValue(data.humidity, "%")}
+              </Text>
+              <Text style={styles.weatherDetailText}>
+                풍속 {formatValue(data.windSpeed, "m/s")}
+              </Text>
+            </View>
+            <View style={styles.weatherDetailRow}>
+              <Text style={styles.weatherDetailText}>
+                강수량 {data.precipitation1h}
+              </Text>
+              <Text style={styles.weatherDetailText}>
+                풍향 {data.windDirection ?? "-"}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Friend Selector */}
@@ -78,13 +118,29 @@ const styles = StyleSheet.create({
   header: { marginTop: 10, marginBottom: 20 },
   headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
   weatherCard: {
-    backgroundColor: "#eef",
+    backgroundColor: "#fff0f3", // Light pink color
     padding: 15,
     borderRadius: 12,
     marginBottom: 20,
   },
   weatherTemp: { fontSize: 28, fontFamily: "Pretendard-Bold", color: "#333" },
   weatherDesc: { fontSize: 16, color: "#666", fontFamily: "Pretendard-Medium" },
+  weatherMainRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  weatherDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  weatherDetailText: {
+    fontSize: 14,
+    color: "#555",
+    fontFamily: "Pretendard-Medium",
+  },
   selectorContainer: { marginBottom: 25 },
   sectionHeader: { marginBottom: 15 },
   sectionTitle: { fontSize: 20, fontFamily: "Pretendard-Bold" },

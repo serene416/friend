@@ -8,11 +8,11 @@ import { WebView } from 'react-native-webview';
 const KAKAO_JS_KEY = '8723438c42d292525222427c14337829'; // User provided key
 const REDIRECT_URI = 'http://localhost:8081/auth/kakao/callback'; // Dummy URI for interception
 
-// Configure Backend URL - Update this with your actual machine IP if testing on device
+// Configure Backend URL
+// Prefer EXPO_PUBLIC_BACKEND_URL if set; fallback to ngrok domain for device testing
 // For Android Emulator use 'http://10.0.2.2:8000'
 // For iOS Simulator use 'http://localhost:8000'
-// For Physical Device, use your computer's LAN IP (e.g. 10.249.xx.xx)
-const BACKEND_URL = 'http://10.249.79.38:8000'; // Forced to user-specified working IP
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://playwithme.ngrok.app';
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -45,6 +45,7 @@ export default function LoginScreen() {
             });
 
             const nickname = profileResponse.data.properties?.nickname || profileResponse.data.kakao_account?.profile?.nickname || 'Unknown';
+            const avatar = profileResponse.data.properties?.thumbnail_image || profileResponse.data.kakao_account?.profile?.thumbnail_image_url || null;
 
             // 3. Send Token to Backend
             const backendResponse = await axios.post(`${BACKEND_URL}/api/v1/auth/kakao`, {
@@ -54,7 +55,9 @@ export default function LoginScreen() {
 
             if (backendResponse.status === 200) {
                 const userData = backendResponse.data;
-                login(userData, access_token);
+                // Merge avatar if backend doesn't provide it
+                const finalUser = { ...userData, avatar: userData.avatar || avatar, nickname: userData.nickname || nickname };
+                login(finalUser, access_token);
                 // Navigate to Main App (Home Tab)
                 // @ts-ignore - Valid route in Expo Router
                 router.replace('/home');
@@ -81,16 +84,16 @@ export default function LoginScreen() {
             <View style={styles.content}>
                 <Text style={styles.title}>환영합니다</Text>
                 <Text style={styles.subtitle}>로그인하여 시작해보세요</Text>
+            </View>
 
+            <View style={styles.footer}>
                 <TouchableOpacity
                     style={[styles.button, styles.kakaoButton]}
                     onPress={() => setIsWebViewVisible(true)}
                 >
                     <Text style={[styles.buttonText, { color: '#000' }]}>카카오로 로그인하기</Text>
                 </TouchableOpacity>
-            </View>
 
-            <View style={styles.footer}>
                 <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                     <Text style={styles.skipText}>다음에 하기</Text>
                 </TouchableOpacity>
@@ -155,26 +158,26 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff', justifyContent: 'center', padding: 20 },
+    container: { flex: 1, backgroundColor: '#fff', padding: 20 },
     content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    title: { fontFamily: 'Pretendard-Bold', fontSize: 32, marginBottom: 10 },
-    subtitle: { fontFamily: 'Pretendard-Medium', fontSize: 16, color: '#666', marginBottom: 40 },
-    footer: { marginBottom: 30, alignItems: 'center' },
-    skipButton: { padding: 15, alignItems: 'center' },
-    skipText: { fontFamily: 'Pretendard-Medium', color: '#666', fontSize: 14 },
+    title: { fontFamily: 'Pretendard-Bold', fontSize: 32, marginBottom: 24 }, // Increased spacing
+    subtitle: { fontFamily: 'Pretendard-Medium', fontSize: 18, color: '#666' }, // Slightly larger
+    footer: { marginBottom: 20, alignItems: 'center', paddingHorizontal: 10 },
+    skipButton: { padding: 10, alignItems: 'center' },
+    skipText: { fontFamily: 'Pretendard-Medium', color: '#888', fontSize: 15 },
     button: {
         width: '100%',
-        padding: 15,
-        borderRadius: 12,
+        padding: 18,
+        borderRadius: 16,
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 12, // Spacing between Kakao and Skip
     },
     kakaoButton: {
         backgroundColor: '#FEE500', // Kakao Yellow
     },
     buttonText: {
         fontFamily: 'Pretendard-Bold',
-        fontSize: 16,
+        fontSize: 17,
     },
     closeButton: {
         padding: 10,

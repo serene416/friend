@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Image } from 'react-native';
+import { FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFriendStore } from '../store/useFriendStore';
 
 export default function FriendSelector() {
@@ -12,7 +12,7 @@ export default function FriendSelector() {
         <View>
             <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
                 <Text style={styles.buttonText}>
-                    {selectedCount > 0 ? `With ${selectedCount} friends` : 'Select friends to play with'}
+                    {selectedCount > 0 ? `친구 ${selectedCount}명과 함께` : '함께 놀 친구를 선택하세요'}
                 </Text>
             </TouchableOpacity>
 
@@ -20,9 +20,9 @@ export default function FriendSelector() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.header}>
-                            <Text style={styles.title}>Select Friends</Text>
+                            <Text style={styles.title}>친구 선택</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                <Text style={styles.closeText}>Done</Text>
+                                <Text style={styles.closeText}>완료</Text>
                             </TouchableOpacity>
                         </View>
 
