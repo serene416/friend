@@ -275,19 +275,45 @@ const parseKmaJson = (
   responseText: string,
   parseErrorMessage: string,
 ) => {
-  try {
-    return JSON.parse(responseText);
-  } catch {
-    const trimmed = responseText.trim();
-    if (trimmed.startsWith("<")) {
-      const xmlMessage = extractXmlMessage(trimmed);
-      if (xmlMessage) {
-        throw new Error(`기상청 API 오류: ${xmlMessage}`);
-      }
-      throw new Error("기상청 API가 JSON 대신 XML 응답을 반환했습니다.");
+  const normalizedText = responseText.trim().replace(/^\uFEFF/, "");
+
+  const tryParse = (value: string) => {
+    try {
+      return { ok: true as const, value: JSON.parse(value) };
+    } catch {
+      return { ok: false as const, value: null };
     }
-    throw new Error(parseErrorMessage);
+  };
+
+  const directParse = tryParse(responseText);
+  if (directParse.ok) return directParse.value;
+
+  if (normalizedText !== responseText) {
+    const normalizedParse = tryParse(normalizedText);
+    if (normalizedParse.ok) return normalizedParse.value;
   }
+
+  const firstJsonStart = normalizedText.search(/[{\[]/);
+  if (firstJsonStart > 0) {
+    const slicedParse = tryParse(normalizedText.slice(firstJsonStart));
+    if (slicedParse.ok) return slicedParse.value;
+  }
+
+  if (!normalizedText) {
+    throw new Error("기상청 API 응답이 비어 있습니다.");
+  }
+
+  if (normalizedText.startsWith("<")) {
+    const xmlMessage = extractXmlMessage(normalizedText);
+    if (xmlMessage) {
+      throw new Error(`기상청 API 오류: ${xmlMessage}`);
+    }
+    throw new Error("기상청 API가 JSON 대신 XML 응답을 반환했습니다.");
+  }
+
+  const compactSnippet = normalizedText.slice(0, 120).replace(/\s+/g, " ");
+  const suffix = normalizedText.length > 120 ? "..." : "";
+  throw new Error(`${parseErrorMessage} (응답 일부: ${compactSnippet}${suffix})`);
 };
 
 export const useCurrentWeather = (): WeatherState => {

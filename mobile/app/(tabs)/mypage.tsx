@@ -11,6 +11,21 @@ import { useFriendStore } from '../../store/useFriendStore';
 
 const BACKEND_URL = getBackendUrl();
 
+function buildLocationLabel(place: Location.LocationGeocodedAddress) {
+    const parts = [place.region, place.city, place.district ?? place.subregion]
+        .map((part) => (part || '').trim())
+        .filter(Boolean);
+
+    const dedupedParts: string[] = [];
+    for (const part of parts) {
+        if (!dedupedParts.includes(part)) {
+            dedupedParts.push(part);
+        }
+    }
+
+    return dedupedParts.join(' ');
+}
+
 export default function MyPageScreen() {
     const router = useRouter();
     const { user, logout, updateStatusMessage } = useAuthStore();
@@ -90,7 +105,7 @@ export default function MyPageScreen() {
 
                             if (geocode.length > 0) {
                                 const place = geocode[0];
-                                resolvedName = `${place.region || ''} ${place.city || ''} ${place.district || ''}`.trim() || undefined;
+                                resolvedName = buildLocationLabel(place) || undefined;
                             }
 
                             setLocationName(resolvedName || '위치를 알 수 없음');
