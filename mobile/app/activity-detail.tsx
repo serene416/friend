@@ -102,22 +102,20 @@ export default function ActivityDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header with back button */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <MaterialCommunityIcons name="arrow-left" size={28} color="#333" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => toggleFavorite(activityId)}>
+        {/* Activity Image & Favorite Button */}
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: activity.image }} style={styles.heroImage} />
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={() => toggleFavorite(activityId)}
+          >
             <MaterialCommunityIcons
               name={isFavorite(activityId) ? "heart" : "heart-outline"}
               size={28}
-              color={isFavorite(activityId) ? "#FF4B4B" : "#333"}
+              color={isFavorite(activityId) ? "#FF4B4B" : "#fff"}
             />
           </TouchableOpacity>
         </View>
-
-        {/* Activity Image */}
-        <Image source={{ uri: activity.image }} style={styles.heroImage} />
 
         {/* Activity Info */}
         <View style={styles.infoContainer}>
@@ -245,18 +243,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 300,
   },
   heroImage: {
     width: "100%",
-    height: 250,
+    height: "100%",
     backgroundColor: "#eee",
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
+    padding: 8,
   },
   infoContainer: {
     paddingHorizontal: 20,
