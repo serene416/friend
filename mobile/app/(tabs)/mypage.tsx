@@ -197,6 +197,13 @@ export default function MyPageScreen() {
         }
     };
 
+    const handleDeleteFriend = (id: string) => {
+        Alert.alert('친구 삭제', '친구를 삭제하시겠습니까?', [
+            { text: '취소', style: 'cancel' },
+            { text: '삭제', style: 'destructive', onPress: () => removeFriend(id) },
+        ]);
+    };
+
     const renderFriend = ({ item }: { item: Friend }) => (
         <View style={styles.friendItem}>
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -206,7 +213,7 @@ export default function MyPageScreen() {
                     {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
                 </Text>
             </View>
-            <TouchableOpacity onPress={() => removeFriend(item.id)} style={styles.deleteButton}>
+            <TouchableOpacity onPress={() => handleDeleteFriend(item.id)} style={styles.deleteButton}>
                 <Text style={styles.deleteText}>삭제</Text>
             </TouchableOpacity>
         </View>
