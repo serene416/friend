@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   weatherStatus: {
     fontSize: 18,
     color: "#4A4A4A",
-    fontFamily: "Pretendard-SemiBold",
+    fontFamily: "Pretendard-Bold",
     marginBottom: 8,
   },
   weatherSubInfo: {
