@@ -60,65 +60,68 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
-      </View>
-
-      {/* Weather Widget */}
-      <View style={styles.weatherCard}>
-        {loading && (
-          <Text style={styles.weatherDesc}>날씨 불러오는 중...</Text>
-        )}
-        {!loading && permissionDenied && (
-          <Text style={styles.weatherDesc}>
-            위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.
-          </Text>
-        )}
-        {!loading && !permissionDenied && error && (
-          <Text style={styles.weatherDesc}>날씨 오류: {error}</Text>
-        )}
-        {!loading && !permissionDenied && !error && data && (
-          <View style={styles.weatherContainer}>
-            <View style={styles.weatherInfo}>
-              <Text style={styles.weatherTemp}>
-                {formatValue(data.temperature, "°")}
-              </Text>
-              <Text style={styles.weatherStatus}>{data.precipitationType}</Text>
-              <View style={styles.weatherSubInfo}>
-                <Text style={styles.weatherDetailText}>
-                  습도 {formatValue(data.humidity, "%")}
-                </Text>
-                <Text style={styles.weatherDetailText}>
-                  강수량 {data.precipitation1h}
-                </Text>
-              </View>
-            </View>
-            <Image
-              source={getWeatherIcon(data.precipitationType)}
-              style={styles.weatherIcon}
-              resizeMode="contain"
-            />
-          </View>
-        )}
-      </View>
-
-      {/* Friend Selector */}
-      <View style={styles.selectorContainer}>
-        <FriendSelector />
-      </View>
-
-      {/* Recommendations */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>오늘의 추천 활동</Text>
-      </View>
-
       <FlatList
         data={MOCK_ACTIVITIES}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
+            </View>
+
+            {/* Weather Widget */}
+            <View style={styles.weatherCard}>
+              {loading && (
+                <Text style={styles.weatherDesc}>날씨 불러오는 중...</Text>
+              )}
+              {!loading && permissionDenied && (
+                <Text style={styles.weatherDesc}>
+                  위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.
+                </Text>
+              )}
+              {!loading && !permissionDenied && error && (
+                <Text style={styles.weatherDesc}>날씨 오류: {error}</Text>
+              )}
+              {!loading && !permissionDenied && !error && data && (
+                <View style={styles.weatherContainer}>
+                  <View style={styles.weatherInfo}>
+                    <Text style={styles.weatherTemp}>
+                      {formatValue(data.temperature, "°")}
+                    </Text>
+                    <Text style={styles.weatherStatus}>{data.precipitationType}</Text>
+                    <View style={styles.weatherSubInfo}>
+                      <Text style={styles.weatherDetailText}>
+                        습도 {formatValue(data.humidity, "%")}
+                      </Text>
+                      <Text style={styles.weatherDetailText}>
+                        강수량 {data.precipitation1h}
+                      </Text>
+                    </View>
+                  </View>
+                  <Image
+                    source={getWeatherIcon(data.precipitationType)}
+                    style={styles.weatherIcon}
+                    resizeMode="contain"
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Friend Selector */}
+            <View style={styles.selectorContainer}>
+              <FriendSelector />
+            </View>
+
+            {/* Recommendations Title */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>오늘의 추천 활동</Text>
+            </View>
+          </>
+        }
       />
     </SafeAreaView>
   );
@@ -129,8 +132,8 @@ const styles = StyleSheet.create({
   header: { marginTop: 10, marginBottom: 20 },
   headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
   weatherCard: {
-    backgroundColor: "#fff0f3", // Back to original light pink
-    padding: 24,
+    backgroundColor: "#fff0f3",
+    padding: 16,
     borderRadius: 24,
     marginBottom: 20,
   },
@@ -143,28 +146,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weatherTemp: {
-    fontSize: 48,
+    fontSize: 40,
     fontFamily: "Pretendard-Bold",
     color: "#1A1A1A",
-    lineHeight: 56,
+    lineHeight: 48,
   },
   weatherStatus: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#4A4A4A",
     fontFamily: "Pretendard-Bold",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   weatherSubInfo: {
     flexDirection: "row",
     gap: 12,
   },
   weatherIcon: {
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
   },
-  weatherDesc: { fontSize: 16, color: "#666", fontFamily: "Pretendard-Medium" },
+  weatherDesc: { fontSize: 14, color: "#666", fontFamily: "Pretendard-Medium" },
   weatherDetailText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#7A7A7A",
     fontFamily: "Pretendard-Medium",
   },
