@@ -13,6 +13,11 @@ class FriendshipStatus(str, enum.Enum):
     ACCEPTED = "ACCEPTED"
     BLOCKED = "BLOCKED"
 
+class InviteStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    EXPIRED = "EXPIRED"
+
 class AITaskStatus(str, enum.Enum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
@@ -34,6 +39,8 @@ class User(SQLModel, table=True):
     email: Optional[str] = None
     nickname: str
     profile_image: Optional[str] = None
+    status_message: Optional[str] = Field(default=None, sa_column=Column(String))
+    status_message_expires_at: Optional[datetime] = Field(default=None)
     preference_vector: List[float] = Field(default=[], sa_column=Column(ARRAY(Float)))
     kakao_id: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"unique": True})
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -47,6 +54,17 @@ class Friendship(SQLModel, table=True):
     addressee_id: UUID = Field(foreign_key="user.id")
     status: FriendshipStatus = Field(default=FriendshipStatus.PENDING)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Invite Model
+class Invite(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    token: str = Field(index=True, sa_column_kwargs={"unique": True})
+    inviter_id: UUID = Field(foreign_key="user.id")
+    accepted_by_id: Optional[UUID] = Field(default=None, foreign_key="user.id")
+    status: InviteStatus = Field(default=InviteStatus.PENDING)
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    accepted_at: Optional[datetime] = Field(default=None)
 
 # Place Model
 class Place(SQLModel, table=True):

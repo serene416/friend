@@ -2,8 +2,7 @@ export interface Friend {
   id: string;
   name: string;
   avatar: string; // URL or placeholder
-  status: 'online' | 'offline';
-  location: string;
+  statusMessage?: string;
 }
 
 export interface Activity {
@@ -24,11 +23,11 @@ export const MOCK_USER = {
 };
 
 export const MOCK_FRIENDS: Friend[] = [
-  { id: 'f1', name: 'Minji', avatar: 'https://i.pravatar.cc/150?u=f1', status: 'online', location: 'Gangnam Station' },
-  { id: 'f2', name: 'Chulsoo', avatar: 'https://i.pravatar.cc/150?u=f2', status: 'offline', location: 'Home' },
-  { id: 'f3', name: 'Younghee', avatar: 'https://i.pravatar.cc/150?u=f3', status: 'online', location: 'Hongdae' },
-  { id: 'f4', name: 'Joon', avatar: 'https://i.pravatar.cc/150?u=f4', status: 'offline', location: 'Work' },
-  { id: 'f5', name: 'Hana', avatar: 'https://i.pravatar.cc/150?u=f5', status: 'online', location: 'Seongsu' },
+  { id: 'f1', name: '민지', avatar: 'https://i.pravatar.cc/150?u=f1', statusMessage: '공부 중...' },
+  { id: 'f2', name: '철수', avatar: 'https://i.pravatar.cc/150?u=f2', statusMessage: '운동 하러 가실 분?' },
+  { id: 'f3', name: '영희', avatar: 'https://i.pravatar.cc/150?u=f3', statusMessage: '커피 마시고 싶다' },
+  { id: 'f4', name: '준', avatar: 'https://i.pravatar.cc/150?u=f4', statusMessage: '자고 싶다' },
+  { id: 'f5', name: '하나', avatar: 'https://i.pravatar.cc/150?u=f5', statusMessage: '한강 갈래?' },
 ];
 
 export const MOCK_ACTIVITIES: Activity[] = [

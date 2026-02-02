@@ -1,18 +1,25 @@
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, FlatList, Image, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getBackendUrl } from '../../constants/api';
 import { Friend } from '../../constants/data';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useFriendStore } from '../../store/useFriendStore';
 
+const BACKEND_URL = getBackendUrl();
+
 export default function MyPageScreen() {
     const router = useRouter();
-    const { user, logout } = useAuthStore();
-    const { friends, removeFriend } = useFriendStore();
+    const { user, logout, updateStatusMessage } = useAuthStore();
+    const { friends, removeFriend, loadFriends } = useFriendStore();
     const [locationName, setLocationName] = useState('위치 정보를 불러오는 중...');
+    const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+    const [isLoadingFriends, setIsLoadingFriends] = useState(false);
+    const [statusInput, setStatusInput] = useState(user?.statusMessage || '');
+    const [isSavingStatus, setIsSavingStatus] = useState(false);
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -56,8 +63,85 @@ export default function MyPageScreen() {
         };
     }, []);
 
+    const refreshFriends = useCallback(async () => {
+        if (!user?.id) {
+            return;
+        }
+        try {
+            setIsLoadingFriends(true);
+            await loadFriends(user.id);
+        } catch (error) {
+            console.error('Load Friends Error:', error);
+        } finally {
+            setIsLoadingFriends(false);
+        }
+    }, [user?.id, loadFriends]);
+
+    useEffect(() => {
+        refreshFriends();
+    }, [refreshFriends]);
+
+    useFocusEffect(
+        useCallback(() => {
+            refreshFriends();
+            const interval = setInterval(refreshFriends, 30000);
+            return () => clearInterval(interval);
+        }, [refreshFriends])
+    );
+
+    useEffect(() => {
+        setStatusInput(user?.statusMessage || '');
+    }, [user?.statusMessage]);
+
+    useEffect(() => {
+        if (!user?.statusMessageExpiresAt) {
+            return;
+        }
+        const expiresAt = new Date(user.statusMessageExpiresAt);
+        if (Number.isNaN(expiresAt.getTime())) {
+            return;
+        }
+        if (expiresAt <= new Date()) {
+            updateStatusMessage('', null);
+            setStatusInput('');
+        }
+    }, [user?.statusMessageExpiresAt, updateStatusMessage]);
+
+    // --- 카카오 친구 목록 불러오기 (구현 가이드) ---
     const handleAddFriend = async () => {
-        Alert.alert('친구 추가', '카카오톡 친구 목록 API를 호출합니다.');
+        if (!user?.id) {
+            Alert.alert('로그인이 필요합니다', '초대 링크를 만들려면 로그인해주세요.');
+            return;
+        }
+
+        try {
+            setIsCreatingInvite(true);
+            const response = await fetch(`${BACKEND_URL}/api/v1/friends/invite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inviter_user_id: user.id }),
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({}));
+                const message = errorBody?.detail || '초대 링크 생성에 실패했습니다.';
+                throw new Error(message);
+            }
+
+            const data = await response.json();
+            const inviteLink = __DEV__
+                ? Linking.createURL('invite', { queryParams: { token: data.token } })
+                : data.invite_link;
+
+            await Share.share({
+                message: `친구 추가 초대 링크입니다. 앱에서 열어주세요!\\n${inviteLink}`,
+                url: inviteLink,
+            });
+        } catch (error: any) {
+            Alert.alert('초대 링크 생성 실패', error?.message || '알 수 없는 오류가 발생했습니다.');
+        } finally {
+            setIsCreatingInvite(false);
+        }
     };
 
     const handleLogout = () => {
@@ -82,12 +166,43 @@ export default function MyPageScreen() {
         Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
     };
 
+    const handleStatusSubmit = async () => {
+        if (!user?.id) {
+            Alert.alert('로그인이 필요합니다', '상태메시지를 저장하려면 로그인해주세요.');
+            return;
+        }
+
+        try {
+            setIsSavingStatus(true);
+            const response = await fetch(`${BACKEND_URL}/api/v1/users/status-message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: user.id, message: statusInput }),
+            });
+
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = body?.detail || '상태메시지 저장에 실패했습니다.';
+                throw new Error(message);
+            }
+
+            updateStatusMessage(body?.message || '', body?.expires_at || null);
+            await refreshFriends();
+        } catch (error: any) {
+            Alert.alert('저장 실패', error?.message || '알 수 없는 오류가 발생했습니다.');
+        } finally {
+            setIsSavingStatus(false);
+        }
+    };
+
     const renderFriend = ({ item }: { item: Friend }) => (
         <View style={styles.friendItem}>
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
             <View style={styles.friendInfo}>
                 <Text style={styles.friendName}>{item.name}</Text>
-                <Text style={styles.friendStatus}>{item.location}</Text>
+                <Text style={styles.friendStatus}>
+                    {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
+                </Text>
             </View>
             <TouchableOpacity onPress={() => removeFriend(item.id)} style={styles.deleteButton}>
                 <Text style={styles.deleteText}>삭제</Text>
@@ -106,6 +221,24 @@ export default function MyPageScreen() {
                 <View style={styles.profileTextContainer}>
                     <Text style={styles.profileName}>{user?.nickname || '사용자'}</Text>
                     <Text style={styles.profileLocation}>{locationName}</Text>
+                    <View style={styles.statusInputContainer}>
+                        <View style={styles.statusRow}>
+                            <TextInput
+                                style={styles.statusInput}
+                                placeholder="상태 메시지를 입력하세요"
+                                value={statusInput}
+                                onChangeText={setStatusInput}
+                                returnKeyType="done"
+                            />
+                            <TouchableOpacity
+                                style={styles.statusSaveButton}
+                                onPress={handleStatusSubmit}
+                                disabled={isSavingStatus}
+                            >
+                                <Text style={styles.statusSaveText}>{isSavingStatus ? '저장중' : '저장'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 </View>
             </View>
 
@@ -113,8 +246,8 @@ export default function MyPageScreen() {
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>카카오톡 친구</Text>
-                    <TouchableOpacity onPress={handleAddFriend}>
-                        <Text style={styles.addButton}>+ 친구 추가</Text>
+                    <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
+                        <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                     </TouchableOpacity>
                 </View>
                 <FlatList
@@ -122,7 +255,13 @@ export default function MyPageScreen() {
                     keyExtractor={(item) => item.id}
                     renderItem={renderFriend}
                     contentContainerStyle={styles.listContent}
-                    ListEmptyComponent={<Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>친구가 없습니다.</Text>}
+                    refreshing={isLoadingFriends}
+                    onRefresh={refreshFriends}
+                    ListEmptyComponent={
+                        <Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>
+                            {isLoadingFriends ? '친구 목록을 불러오는 중...' : '친구가 없습니다.'}
+                        </Text>
+                    }
                 />
             </View>
 
@@ -167,7 +306,19 @@ const styles = StyleSheet.create({
     profileAvatar: { width: 64, height: 64, borderRadius: 32, marginRight: 16, backgroundColor: '#f5f5f5' },
     profileTextContainer: { flex: 1 },
     profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 4 },
-    profileLocation: { fontSize: 14, color: '#888', fontFamily: 'Pretendard-Medium' },
+    statusInputContainer: { marginTop: 8 },
+    statusRow: { flexDirection: 'row', alignItems: 'center' },
+    statusInput: {
+        flex: 1,
+        fontSize: 14,
+        color: '#666',
+        fontFamily: 'Pretendard-Medium',
+        paddingVertical: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    statusSaveButton: { marginLeft: 8, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#333', borderRadius: 8 },
+    statusSaveText: { color: '#fff', fontSize: 12, fontFamily: 'Pretendard-Bold' },
     section: { marginBottom: 30, flex: 1 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold' },

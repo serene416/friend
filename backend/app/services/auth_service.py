@@ -68,7 +68,9 @@ class AuthService:
                     detail="Failed to connect to Kakao API"
                 )
 
-    async def authenticate_kakao(self, session: AsyncSession, access_token: str, nickname: str) -> KakaoAuthResponse:
+    async def authenticate_kakao(
+        self, session: AsyncSession, access_token: str, nickname: str, profile_image: str | None = None
+    ) -> KakaoAuthResponse:
         """
         Main entry point for Kakao authentication.
         Verifies token, fetches info, syncs with DB, and returns response.
@@ -100,12 +102,16 @@ class AuthService:
             user = User(
                 kakao_id=kakao_id,
                 nickname=nickname,
+                profile_image=profile_image,
             )
             session.add(user)
         else:
             # Update existing user
             if user.nickname != nickname:
                 user.nickname = nickname
+                session.add(user)
+            if profile_image and user.profile_image != profile_image:
+                user.profile_image = profile_image
                 session.add(user)
         
         await session.commit()
@@ -116,6 +122,7 @@ class AuthService:
             kakao_id=user.kakao_id,
             nickname=user.nickname,
             is_new_user=is_new_user,
+            profile_image=user.profile_image,
             access_token=access_token # Optionally return the same token
         )
 

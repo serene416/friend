@@ -39,7 +39,9 @@ export default function FriendSelector() {
                                         <Image source={{ uri: item.avatar }} style={styles.avatar} />
                                         <View style={styles.info}>
                                             <Text style={styles.name}>{item.name}</Text>
-                                            <Text style={styles.status}>{item.status} • {item.location}</Text>
+                                            <Text style={styles.status}>
+                                                {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
+                                            </Text>
                                         </View>
                                         <View style={[styles.checkbox, isSelected && styles.checked]}>
                                             {isSelected && <Text style={styles.checkMark}>✓</Text>}
