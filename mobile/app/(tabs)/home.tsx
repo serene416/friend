@@ -11,7 +11,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import FriendSelector from "../../components/FriendSelector";
 import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
 
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useCurrentWeather } from "../../hooks/useCurrentWeather";
 import { useFavoriteStore } from "../../store/useFavoriteStore";
 
@@ -80,17 +79,6 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <TouchableOpacity
-        style={styles.heartButton}
-        onPress={() => toggleFavorite(item.id)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <MaterialCommunityIcons
-          name={isFavorite(item.id) ? "heart" : "heart-outline"}
-          size={24}
-          color={isFavorite(item.id) ? "#FF4B4B" : "#666"}
-        />
-      </TouchableOpacity>
     </TouchableOpacity >
   );
 
