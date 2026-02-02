@@ -1,7 +1,8 @@
 import * as Linking from 'expo-linking';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Alert, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Friend } from '../../constants/data';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -9,14 +10,51 @@ import { useFriendStore } from '../../store/useFriendStore';
 
 export default function MyPageScreen() {
     const router = useRouter();
-    const { user, logout, updateStatusMessage } = useAuthStore();
+    const { user, logout } = useAuthStore();
     const { friends, removeFriend } = useFriendStore();
-    const [statusInput, setStatusInput] = useState(user?.statusMessage || '');
+    const [locationName, setLocationName] = useState('위치 정보를 불러오는 중...');
 
-    const handleStatusSubmit = () => {
-        updateStatusMessage(statusInput);
-        Alert.alert('저장 완료', '상태 메시지가 업데이트되었습니다.');
-    };
+    useEffect(() => {
+        let subscription: Location.LocationSubscription | null = null;
+
+        (async () => {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                setLocationName('위치 권한 필요');
+                return;
+            }
+
+            try {
+                subscription = await Location.watchPositionAsync(
+                    {
+                        accuracy: Location.Accuracy.Balanced,
+                        distanceInterval: 100, // Update every 100 meters
+                    },
+                    async (location) => {
+                        let geocode = await Location.reverseGeocodeAsync({
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                        });
+
+                        if (geocode.length > 0) {
+                            const place = geocode[0];
+                            const name = `${place.region || ''} ${place.city || ''} ${place.district || ''}`.trim();
+                            setLocationName(name || '위치를 알 수 없음');
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error('Location Error:', error);
+                setLocationName('위치 정보를 가져올 수 없습니다');
+            }
+        })();
+
+        return () => {
+            if (subscription) {
+                subscription.remove();
+            }
+        };
+    }, []);
 
     const handleAddFriend = async () => {
         Alert.alert('친구 추가', '카카오톡 친구 목록 API를 호출합니다.');
@@ -49,7 +87,7 @@ export default function MyPageScreen() {
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
             <View style={styles.friendInfo}>
                 <Text style={styles.friendName}>{item.name}</Text>
-                <Text style={styles.friendStatus}>{item.statusMessage}</Text>
+                <Text style={styles.friendStatus}>{item.location}</Text>
             </View>
             <TouchableOpacity onPress={() => removeFriend(item.id)} style={styles.deleteButton}>
                 <Text style={styles.deleteText}>삭제</Text>
@@ -67,16 +105,7 @@ export default function MyPageScreen() {
                 />
                 <View style={styles.profileTextContainer}>
                     <Text style={styles.profileName}>{user?.nickname || '사용자'}</Text>
-                    <View style={styles.statusInputContainer}>
-                        <TextInput
-                            style={styles.statusInput}
-                            placeholder="상태 메시지를 입력하세요"
-                            value={statusInput}
-                            onChangeText={setStatusInput}
-                            onBlur={handleStatusSubmit}
-                            returnKeyType="done"
-                        />
-                    </View>
+                    <Text style={styles.profileLocation}>{locationName}</Text>
                 </View>
             </View>
 
@@ -138,8 +167,7 @@ const styles = StyleSheet.create({
     profileAvatar: { width: 64, height: 64, borderRadius: 32, marginRight: 16, backgroundColor: '#f5f5f5' },
     profileTextContainer: { flex: 1 },
     profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 4 },
-    statusInputContainer: { marginTop: 4 },
-    statusInput: { fontSize: 14, color: '#666', fontFamily: 'Pretendard-Medium', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#eee' },
+    profileLocation: { fontSize: 14, color: '#888', fontFamily: 'Pretendard-Medium' },
     section: { marginBottom: 30, flex: 1 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
