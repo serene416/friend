@@ -1,3 +1,4 @@
+import { getBackendUrl } from '@/constants/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
@@ -12,7 +13,7 @@ const REDIRECT_URI = 'http://localhost:8081/auth/kakao/callback'; // Dummy URI f
 // Prefer EXPO_PUBLIC_BACKEND_URL if set; fallback to ngrok domain for device testing
 // For Android Emulator use 'http://10.0.2.2:8000'
 // For iOS Simulator use 'http://localhost:8000'
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://playwithme.ngrok.app';
+const BACKEND_URL = getBackendUrl();
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -50,13 +51,18 @@ export default function LoginScreen() {
             // 3. Send Token to Backend
             const backendResponse = await axios.post(`${BACKEND_URL}/api/v1/auth/kakao`, {
                 kakao_access_token: access_token,
-                nickname: nickname
+                nickname: nickname,
+                profile_image: avatar,
             });
 
             if (backendResponse.status === 200) {
                 const userData = backendResponse.data;
-                // Merge avatar if backend doesn't provide it
-                const finalUser = { ...userData, avatar: userData.avatar || avatar, nickname: userData.nickname || nickname };
+                const finalUser = {
+                    id: userData.user_id,
+                    kakao_id: userData.kakao_id,
+                    nickname: userData.nickname || nickname,
+                    avatar: userData.profile_image || avatar,
+                };
                 login(finalUser, access_token);
                 // Navigate to Main App (Home Tab)
                 // @ts-ignore - Valid route in Expo Router

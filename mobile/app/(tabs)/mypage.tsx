@@ -2,17 +2,21 @@ import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Image, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getBackendUrl } from '../../constants/api';
 import { Friend } from '../../constants/data';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useFriendStore } from '../../store/useFriendStore';
+
+const BACKEND_URL = getBackendUrl();
 
 export default function MyPageScreen() {
     const router = useRouter();
     const { user, logout } = useAuthStore();
     const { friends, removeFriend } = useFriendStore();
     const [locationName, setLocationName] = useState('위치 정보를 불러오는 중...');
+    const [isCreatingInvite, setIsCreatingInvite] = useState(false);
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -58,7 +62,39 @@ export default function MyPageScreen() {
 
     // --- 카카오 친구 목록 불러오기 (구현 가이드) ---
     const handleAddFriend = async () => {
-        Alert.alert('친구 추가', '카카오톡 친구 목록 API를 호출합니다.');
+        if (!user?.id) {
+            Alert.alert('로그인이 필요합니다', '초대 링크를 만들려면 로그인해주세요.');
+            return;
+        }
+
+        try {
+            setIsCreatingInvite(true);
+            const response = await fetch(`${BACKEND_URL}/api/v1/friends/invite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inviter_user_id: user.id }),
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({}));
+                const message = errorBody?.detail || '초대 링크 생성에 실패했습니다.';
+                throw new Error(message);
+            }
+
+            const data = await response.json();
+            const inviteLink = __DEV__
+                ? Linking.createURL('invite', { queryParams: { token: data.token } })
+                : data.invite_link;
+
+            await Share.share({
+                message: `친구 추가 초대 링크입니다. 앱에서 열어주세요!\\n${inviteLink}`,
+                url: inviteLink,
+            });
+        } catch (error: any) {
+            Alert.alert('초대 링크 생성 실패', error?.message || '알 수 없는 오류가 발생했습니다.');
+        } finally {
+            setIsCreatingInvite(false);
+        }
     };
 
     const handleLogout = () => {
@@ -116,8 +152,8 @@ export default function MyPageScreen() {
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>카카오톡 친구</Text>
-                    <TouchableOpacity onPress={handleAddFriend}>
-                        <Text style={styles.addButton}>+ 친구 추가</Text>
+                    <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
+                        <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                     </TouchableOpacity>
                 </View>
                 <FlatList

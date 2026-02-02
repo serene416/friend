@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from app.core.db import init_db
 from app.core.logging import configure_logging
 # Import models to register them with metadata
-from app.models.sql import User, Place, Friendship, Group, AITask
+from app.models.sql import User, Place, Friendship, Group, AITask, Invite
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

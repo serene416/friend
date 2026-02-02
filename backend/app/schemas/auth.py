@@ -15,12 +15,14 @@ class TokenData(BaseModel):
 class KakaoAuthRequest(BaseModel):
     kakao_access_token: str
     nickname: str
+    profile_image: Optional[str] = None
 
 class KakaoAuthResponse(BaseModel):
     user_id: UUID
     kakao_id: str
     nickname: str
     is_new_user: bool
+    profile_image: Optional[str] = None
     access_token: Optional[str] = None # Optional for future JWT integration
 
 # User Schemas

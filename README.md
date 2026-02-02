@@ -73,6 +73,18 @@ Notes:
 - If you don't set `EXPO_PUBLIC_BACKEND_URL`, the app falls back to the default ngrok domain configured in `mobile/app/(onboarding)/login.tsx`.
 - If ngrok shows a different URL (no reserved domain), use that URL instead.
 
+### 2.3 Invite Links (Friend Invite)
+
+Backend environment variables:
+- `INVITE_BASE_URL` (default: `myapp://invite`)  
+  Base URL used to construct invite links. It should point to the invite deep link route and will have `?token=...` appended.
+- `INVITE_TOKEN_TTL_DAYS` (default: `7`)  
+  Invite expiration window in days.
+
+Mobile environment variables:
+- `EXPO_PUBLIC_BACKEND_URL`  
+  API base URL for invite creation/acceptance (same as login).
+
 ### 2.2 ngrok automation (reserved domain)
 
 This repo includes a fixed ngrok config and a helper script.
