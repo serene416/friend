@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     },
     profileAvatar: { width: 64, height: 64, borderRadius: 32, marginRight: 16, backgroundColor: '#f5f5f5' },
     profileTextContainer: { flex: 1 },
-    profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 2 },
+    profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 8 },
     profileLocation: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium', marginBottom: 4 },
     profileStatusText: { fontSize: 14, color: '#555', fontFamily: 'Pretendard-Medium', paddingVertical: 2 },
     statusInputContainer: { marginTop: 4 },
