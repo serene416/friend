@@ -89,7 +89,7 @@ export default function HomeScreen() {
           <>
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.headerTitle}>오늘 뭐 할까요?</Text>
+              <Text style={styles.headerTitle}> 우리 오늘 뭐 해?</Text>
             </View>
 
             {/* Weather Widget */}
@@ -123,7 +123,7 @@ export default function HomeScreen() {
                   <View style={styles.weatherContainer}>
                     <View style={styles.weatherInfo}>
                       <Text style={[styles.weatherTemp, { color: currentTheme.text }]}>
-                        {formatValue(data.temperature, "°")}
+                        {formatValue(data.temperature, "°C")}
                       </Text>
                       <Text style={[styles.weatherStatus, { color: currentTheme.text }]}>
                         {weatherStatusText}
@@ -182,9 +182,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weatherTemp: {
-    fontSize: 48,
+    fontSize: 24,
     fontFamily: "Pretendard-Bold",
-    lineHeight: 56,
+    lineHeight: 32,
   },
   weatherStatus: {
     fontSize: 16,
