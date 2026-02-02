@@ -46,6 +46,14 @@ export default function RootLayout() {
             headerBackTitle: "Back"
           }}
         />
+        <Stack.Screen
+          name="favorites"
+          options={{
+            headerShown: true,
+            title: "관심 목록",
+            headerBackTitle: "뒤로"
+          }}
+        />
       </Stack>
     </SafeAreaViewProvider>
   );
