@@ -37,7 +37,7 @@ export default function FavoritesScreen() {
                     ))}
                 </View>
             </View>
-        </View>
+
         </TouchableOpacity >
     );
 
@@ -113,21 +113,4 @@ const styles = StyleSheet.create({
         color: '#999',
     },
 });
-emptyContainer: {
-    alignItems: 'center',
-        justifyContent: 'center',
-            paddingTop: 100,
-    },
-emptyText: {
-    marginTop: 20,
-        fontSize: 18,
-            fontFamily: 'Pretendard-Bold',
-                color: '#666',
-    },
-emptySubText: {
-    marginTop: 10,
-        fontSize: 14,
-            fontFamily: 'Pretendard-Medium',
-                color: '#999',
-    },
-});
+
