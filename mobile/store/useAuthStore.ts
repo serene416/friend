@@ -5,6 +5,7 @@ export interface User {
     kakao_id?: string;
     nickname: string;
     avatar?: string;
+    statusMessage?: string;
 }
 
 interface AuthState {
@@ -13,6 +14,7 @@ interface AuthState {
     isAuthenticated: boolean;
     login: (user: User, token: string) => void;
     logout: () => void;
+    updateStatusMessage: (message: string) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -21,4 +23,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     isAuthenticated: false,
     login: (user, token) => set({ user, accessToken: token, isAuthenticated: true }),
     logout: () => set({ user: null, accessToken: null, isAuthenticated: false }),
+    updateStatusMessage: (message) => set((state) => ({
+        user: state.user ? { ...state.user, statusMessage: message } : null
+    })),
 }));
