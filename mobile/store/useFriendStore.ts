@@ -52,8 +52,7 @@ export const useFriendStore = create<FriendState>((set) => ({
             id: user.id,
             name: user.nickname,
             avatar: user.profile_image || `https://i.pravatar.cc/150?u=${user.id}`,
-            status: 'offline',
-            location: '',
+            statusMessage: user.status_message || '',
         }));
         set({ friends });
     },

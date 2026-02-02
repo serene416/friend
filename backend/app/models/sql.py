@@ -39,6 +39,8 @@ class User(SQLModel, table=True):
     email: Optional[str] = None
     nickname: str
     profile_image: Optional[str] = None
+    status_message: Optional[str] = Field(default=None, sa_column=Column(String))
+    status_message_expires_at: Optional[datetime] = Field(default=None)
     preference_vector: List[float] = Field(default=[], sa_column=Column(ARRAY(Float)))
     kakao_id: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"unique": True})
     created_at: datetime = Field(default_factory=datetime.utcnow)

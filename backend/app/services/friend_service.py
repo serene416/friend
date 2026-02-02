@@ -4,6 +4,7 @@ from app.models.sql import User, Friendship, FriendshipStatus
 from app.schemas.friends import FriendRequestCreate
 from uuid import UUID
 from fastapi import HTTPException
+from datetime import datetime
 
 class FriendService:
     async def send_request(
@@ -67,4 +68,10 @@ class FriendService:
         # Fetch Users
         u_stmt = select(User).where(User.id.in_(friend_ids))
         u_res = await session.execute(u_stmt)
-        return u_res.scalars().all()
+        friends = u_res.scalars().all()
+        now = datetime.utcnow()
+        for friend in friends:
+            if friend.status_message_expires_at and friend.status_message_expires_at < now:
+                friend.status_message = None
+                friend.status_message_expires_at = None
+        return friends
