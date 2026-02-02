@@ -329,7 +329,14 @@ const styles = StyleSheet.create({
     profileTextContainer: { flex: 1 },
     profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 8 },
     profileLocation: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium', marginBottom: 4 },
-    profileStatusText: { fontSize: 14, color: '#555', fontFamily: 'Pretendard-Medium', paddingVertical: 2 },
+    profileStatusText: {
+        fontSize: 14,
+        color: '#555',
+        fontFamily: 'Pretendard-Medium',
+        paddingVertical: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee'
+    },
     statusInputContainer: { marginTop: 4 },
     statusRow: { flexDirection: 'row', alignItems: 'center' },
     statusInput: {
