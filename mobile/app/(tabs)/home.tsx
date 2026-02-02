@@ -12,14 +12,7 @@ import FriendSelector from "../../components/FriendSelector";
 import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
 import { useCurrentWeather } from "../../hooks/useCurrentWeather";
 
-const WEATHER_ICONS: Record<string, any> = {
-  '맑음': require('../../assets/weather/sun.png'),
-  '구름많음': require('../../assets/weather/cloudy_sun.png'),
-  '흐림': require('../../assets/weather/cloudy.png'),
-  '눈': require('../../assets/weather/snow.png'),
-  '비': require('../../assets/weather/cloudy.png'), // Fallback for rain if not provided
-  'default': require('../../assets/weather/sun.png'),
-};
+
 
 const WEATHER_THEMES: Record<string, { bg: string, text: string, border?: string }> = {
   '맑음': { bg: '#81CFEF', text: '#FFFFFF', border: '#FFB2C3' },
@@ -44,9 +37,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { data, loading, error, permissionDenied } = useCurrentWeather();
 
-  const getWeatherIcon = (status: string) => {
-    return WEATHER_ICONS[status] || WEATHER_ICONS['default'];
-  };
+
 
   const getWeatherBackground = (status: string) => {
     return WEATHER_BG_IMAGES[status] || WEATHER_BG_IMAGES['default'];
@@ -141,11 +132,7 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Image
-                      source={getWeatherIcon(data.precipitationType)}
-                      style={styles.weatherIcon}
-                      resizeMode="contain"
-                    />
+                    {/* Icon is now part of the background image */}
                   </View>
                 )}
               </View>
@@ -179,7 +166,6 @@ const styles = StyleSheet.create({
   },
   weatherContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
   },
   weatherInfo: {
@@ -199,10 +185,6 @@ const styles = StyleSheet.create({
   weatherSubInfo: {
     flexDirection: "row",
     gap: 12,
-  },
-  weatherIcon: {
-    width: 80,
-    height: 80,
   },
   weatherDesc: { fontSize: 14, color: "#666", fontFamily: "Pretendard-Medium" },
   weatherDetailText: {
