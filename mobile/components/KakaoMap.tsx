@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { KAKAO_MAP_JS_KEY } from "@env";
+
+const KAKAO_MAP_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_MAP_JS_KEY;
 
 interface KakaoMapProps {
   latitude: number;
