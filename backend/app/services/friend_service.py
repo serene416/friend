@@ -75,3 +75,22 @@ class FriendService:
                 friend.status_message = None
                 friend.status_message_expires_at = None
         return friends
+
+    async def delete_friend(self, session: AsyncSession, user_id: UUID, friend_id: UUID) -> int:
+        stmt = select(Friendship).where(
+            or_(
+                and_(Friendship.requester_id == user_id, Friendship.addressee_id == friend_id),
+                and_(Friendship.requester_id == friend_id, Friendship.addressee_id == user_id),
+            )
+        )
+        result = await session.execute(stmt)
+        friendships = result.scalars().all()
+
+        if not friendships:
+            raise HTTPException(status_code=404, detail="Friendship not found")
+
+        for friendship in friendships:
+            await session.delete(friendship)
+        await session.commit()
+
+        return len(friendships)

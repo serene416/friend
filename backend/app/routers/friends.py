@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 from uuid import UUID
-from app.schemas.friends import FriendRequestCreate, FriendshipResponse, FriendRequestAction
+from app.schemas.friends import (
+    FriendDeleteResponse,
+    FriendRequestAction,
+    FriendRequestCreate,
+    FriendshipResponse,
+)
 from app.schemas.invites import (
     InviteAcceptRequest,
     InviteAcceptResponse,
@@ -54,6 +59,12 @@ async def list_my_friends(session: SessionDep, user_id: UUID | None = Query(defa
         user_id = user.id
 
     return await friend_service.list_friends(session, user_id)
+
+
+@router.delete("/", response_model=FriendDeleteResponse)
+async def delete_friend(session: SessionDep, user_id: UUID = Query(...), friend_id: UUID = Query(...)):
+    deleted_count = await friend_service.delete_friend(session, user_id, friend_id)
+    return FriendDeleteResponse(deleted_count=deleted_count)
 
 
 @router.post("/invite", response_model=InviteCreateResponse)

@@ -21,6 +21,7 @@ export default function MyPageScreen() {
     const [statusInput, setStatusInput] = useState(user?.statusMessage || '');
     const [isSavingStatus, setIsSavingStatus] = useState(false);
     const [isEditingStatus, setIsEditingStatus] = useState(false);
+    const [deletingFriendId, setDeletingFriendId] = useState<string | null>(null);
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -197,6 +198,32 @@ export default function MyPageScreen() {
         }
     };
 
+    const handleDeleteFriend = async (friendId: string) => {
+        if (!user?.id) {
+            Alert.alert('로그인이 필요합니다', '친구를 삭제하려면 로그인해주세요.');
+            return;
+        }
+
+        try {
+            setDeletingFriendId(friendId);
+            const response = await fetch(`${BACKEND_URL}/api/v1/friends?user_id=${user.id}&friend_id=${friendId}`, {
+                method: 'DELETE',
+            });
+
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = body?.detail || '친구 삭제에 실패했습니다.';
+                throw new Error(message);
+            }
+
+            removeFriend(friendId);
+        } catch (error: any) {
+            Alert.alert('삭제 실패', error?.message || '알 수 없는 오류가 발생했습니다.');
+        } finally {
+            setDeletingFriendId(null);
+        }
+    };
+
     const renderFriend = ({ item }: { item: Friend }) => (
         <View style={styles.friendItem}>
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -206,8 +233,21 @@ export default function MyPageScreen() {
                     {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
                 </Text>
             </View>
-            <TouchableOpacity onPress={() => removeFriend(item.id)} style={styles.deleteButton}>
-                <Text style={styles.deleteText}>삭제</Text>
+            <TouchableOpacity
+                onPress={() =>
+                    Alert.alert('친구 삭제', `${item.name}님을 친구 목록에서 삭제하시겠어요?`, [
+                        { text: '취소', style: 'cancel' },
+                        {
+                            text: '삭제',
+                            style: 'destructive',
+                            onPress: () => handleDeleteFriend(item.id),
+                        },
+                    ])
+                }
+                style={styles.deleteButton}
+                disabled={deletingFriendId === item.id}
+            >
+                <Text style={styles.deleteText}>{deletingFriendId === item.id ? '삭제중' : '삭제'}</Text>
             </TouchableOpacity>
         </View>
     );
