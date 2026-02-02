@@ -9,6 +9,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: { paddingBottom: 5, paddingTop: 5, height: 60 },
+        tabBarLabelStyle: { fontFamily: 'Pretendard-Medium', fontSize: 12 },
         tabBarActiveTintColor: "#333",
         tabBarInactiveTintColor: "#999",
       }}

@@ -77,7 +77,7 @@ export default function LoginScreen() {
     };
 
     const handleSkip = () => {
-        router.push('/(onboarding)/permission');
+        router.push('/(tabs)/home');
     };
 
     const runFirst = `
