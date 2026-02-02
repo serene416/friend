@@ -14,9 +14,10 @@ const BACKEND_URL = getBackendUrl();
 export default function MyPageScreen() {
     const router = useRouter();
     const { user, logout } = useAuthStore();
-    const { friends, removeFriend } = useFriendStore();
+    const { friends, removeFriend, loadFriends } = useFriendStore();
     const [locationName, setLocationName] = useState('위치 정보를 불러오는 중...');
     const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+    const [isLoadingFriends, setIsLoadingFriends] = useState(false);
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -59,6 +60,23 @@ export default function MyPageScreen() {
             }
         };
     }, []);
+
+    useEffect(() => {
+        if (!user?.id) {
+            return;
+        }
+
+        (async () => {
+            try {
+                setIsLoadingFriends(true);
+                await loadFriends(user.id);
+            } catch (error) {
+                console.error('Load Friends Error:', error);
+            } finally {
+                setIsLoadingFriends(false);
+            }
+        })();
+    }, [user?.id, loadFriends]);
 
     // --- 카카오 친구 목록 불러오기 (구현 가이드) ---
     const handleAddFriend = async () => {
@@ -153,7 +171,7 @@ export default function MyPageScreen() {
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>카카오톡 친구</Text>
                     <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
-                        <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
+                    <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                     </TouchableOpacity>
                 </View>
                 <FlatList
@@ -161,7 +179,11 @@ export default function MyPageScreen() {
                     keyExtractor={(item) => item.id}
                     renderItem={renderFriend}
                     contentContainerStyle={styles.listContent}
-                    ListEmptyComponent={<Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>친구가 없습니다.</Text>}
+                    ListEmptyComponent={
+                        <Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>
+                            {isLoadingFriends ? '친구 목록을 불러오는 중...' : '친구가 없습니다.'}
+                        </Text>
+                    }
                 />
             </View>
 

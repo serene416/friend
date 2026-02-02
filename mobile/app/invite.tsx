@@ -1,5 +1,6 @@
 import { getBackendUrl } from '@/constants/api';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useFriendStore } from '@/store/useFriendStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -12,6 +13,7 @@ type InviteStatus = 'loading' | 'success' | 'error';
 export default function InviteScreen() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { loadFriends } = useFriendStore();
     const params = useLocalSearchParams<{ token?: string | string[] }>();
     const token = useMemo(() => (Array.isArray(params.token) ? params.token[0] : params.token), [params.token]);
 
@@ -54,6 +56,13 @@ export default function InviteScreen() {
                 if (cancelled) return;
                 setStatus('success');
                 setMessage('친구가 추가되었습니다!');
+                if (user?.id) {
+                    try {
+                        await loadFriends(user.id);
+                    } catch (error) {
+                        console.error('Load Friends Error:', error);
+                    }
+                }
             } catch (error: any) {
                 if (cancelled) return;
                 setStatus('error');
@@ -64,7 +73,7 @@ export default function InviteScreen() {
         return () => {
             cancelled = true;
         };
-    }, [token, user?.id]);
+    }, [token, user?.id, loadFriends]);
 
     const handleGoHome = () => {
         router.replace('/home');
