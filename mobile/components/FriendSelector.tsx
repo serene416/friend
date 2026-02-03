@@ -50,7 +50,6 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
 
     useEffect(() => {
         if (!modalVisible) {
-            setLoadingMidpoint(false);
             return;
         }
 
@@ -60,83 +59,98 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
             return;
         }
 
+        setMidpointText('완료를 누르면 중앙 위치를 계산해요.');
+    }, [modalVisible, selectedCount]);
+
+    const fetchMidpoint = async () => {
+        if (selectedCount < 2) {
+            setMidpointText('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
+            return false;
+        }
+
+        if (loadingMidpoint) {
+            return false;
+        }
+
+        setLoadingMidpoint(true);
         const controller = new AbortController();
-        const fetchMidpoint = async () => {
-            setLoadingMidpoint(true);
-
-            let resolvedParticipants = participants;
-            if (resolvedParticipants.length < 2 && user?.id) {
-                try {
-                    await loadFriends(user.id);
-                    const refreshedFriends = useFriendStore.getState().friends;
-                    const refreshedParticipants = refreshedFriends
-                        .filter((friend) => selectedFriends.includes(friend.id))
-                        .filter(
-                            (friend) =>
-                                typeof friend.latitude === 'number' &&
-                                typeof friend.longitude === 'number'
-                        )
-                        .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
-                    resolvedParticipants = currentLocation
-                        ? [currentLocation, ...refreshedParticipants]
-                        : refreshedParticipants;
-                } catch {
-                    // Keep original participant set and show fallback message below.
-                }
-            }
-
-            if (resolvedParticipants.length < 2) {
-                setMidpointText('선택한 친구의 위치 정보가 부족해요. 마이페이지에서 위치를 최신화한 뒤 다시 시도해주세요.');
-                setLoadingMidpoint(false);
-                return;
-            }
-
+        let resolvedParticipants = participants;
+        if (resolvedParticipants.length < 2 && user?.id) {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/v1/recommend/midpoint-hotplaces`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        participants: resolvedParticipants,
-                        station_limit: 1,
-                        keywords: ['맛집'],
-                        pages: 1,
-                        size: 5,
-                    }),
-                    signal: controller.signal,
-                });
+                await loadFriends(user.id);
+                const refreshedFriends = useFriendStore.getState().friends;
+                const refreshedParticipants = refreshedFriends
+                    .filter((friend) => selectedFriends.includes(friend.id))
+                    .filter(
+                        (friend) =>
+                            typeof friend.latitude === 'number' &&
+                            typeof friend.longitude === 'number'
+                    )
+                    .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
+                resolvedParticipants = currentLocation
+                    ? [currentLocation, ...refreshedParticipants]
+                    : refreshedParticipants;
+            } catch {
+                // Keep original participant set and show fallback message below.
+            }
+        }
 
-                if (!response.ok) {
-                    const errorPayload = await response.json().catch(() => ({}));
-                    const detail =
-                        typeof errorPayload?.detail === 'string'
-                            ? errorPayload.detail
-                            : '중앙 위치를 불러오지 못했어요.';
-                    throw new Error(detail);
-                }
+        if (resolvedParticipants.length < 2) {
+            setMidpointText('선택한 친구의 위치 정보가 부족해요. 마이페이지에서 위치를 최신화한 뒤 다시 시도해주세요.');
+            setLoadingMidpoint(false);
+            return false;
+        }
 
-                const data: MidpointHotplaceResponse = await response.json();
-                const station = data.chosen_stations?.[0];
-                if (station) {
-                    setMidpointText(`대략적인 중앙 위치: ${station.original_name} 근처`);
-                    return;
-                }
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/v1/recommend/midpoint-hotplaces`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    participants: resolvedParticipants,
+                    station_limit: 1,
+                    keywords: ['맛집'],
+                    pages: 1,
+                    size: 5,
+                }),
+                signal: controller.signal,
+            });
 
+            if (!response.ok) {
+                const errorPayload = await response.json().catch(() => ({}));
+                const detail =
+                    typeof errorPayload?.detail === 'string'
+                        ? errorPayload.detail
+                        : '중앙 위치를 불러오지 못했어요.';
+                throw new Error(detail);
+            }
+
+            const data: MidpointHotplaceResponse = await response.json();
+            const station = data.chosen_stations?.[0];
+            if (station) {
+                setMidpointText(`대략적인 중앙 위치: ${station.original_name} 근처`);
+            } else {
                 setMidpointText(
                     `대략적인 중앙 좌표: ${data.midpoint.lat.toFixed(4)}, ${data.midpoint.lng.toFixed(4)}`
                 );
-            } catch (error: any) {
-                if (error?.name === 'AbortError') {
-                    return;
-                }
-                setMidpointText(error?.message || '중앙 위치를 불러오지 못했어요.');
-            } finally {
-                setLoadingMidpoint(false);
             }
-        };
+            return true;
+        } catch (error: any) {
+            if (error?.name !== 'AbortError') {
+                setMidpointText(error?.message || '중앙 위치를 불러오지 못했어요.');
+            }
+            return false;
+        } finally {
+            setLoadingMidpoint(false);
+            controller.abort();
+        }
+    };
 
-        fetchMidpoint();
-        return () => controller.abort();
-    }, [modalVisible, selectedCount, participants, user?.id, loadFriends, selectedFriends]);
+    const handleCompletePress = async () => {
+        const succeeded = await fetchMidpoint();
+        if (succeeded) {
+            setModalVisible(false);
+        }
+    };
 
     return (
         <View>
@@ -151,8 +165,10 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
                     <View style={styles.modalContent}>
                         <View style={styles.header}>
                             <Text style={styles.title}>친구 선택</Text>
-                            <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                <Text style={styles.closeText}>완료</Text>
+                            <TouchableOpacity onPress={handleCompletePress} disabled={loadingMidpoint}>
+                                <Text style={[styles.closeText, loadingMidpoint && styles.closeTextDisabled]}>
+                                    {loadingMidpoint ? '계산중...' : '완료'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                         <View style={styles.midpointBox}>
@@ -215,6 +231,7 @@ const styles = StyleSheet.create({
     midpointText: { fontSize: 14, color: '#1D2A3A', fontFamily: 'Pretendard-Medium' },
     title: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
     closeText: { fontSize: 16, color: '#007AFF', fontFamily: 'Pretendard-Bold' },
+    closeTextDisabled: { color: '#90B8E8' },
     item: {
         flexDirection: 'row',
         alignItems: 'center',
