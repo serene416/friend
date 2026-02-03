@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     },
     statusSaveButton: { marginLeft: 8, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#333', borderRadius: 8 },
     statusSaveText: { color: '#fff', fontSize: 12, fontFamily: 'Pretendard-Bold' },
-    section: { marginBottom: 30, marginTop: 50, flex: 1 },
+    section: { marginBottom: 30, marginTop: 150, flex: 1 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
     addButton: { color: '#007AFF', fontSize: 16, fontFamily: 'Pretendard-Bold' },
