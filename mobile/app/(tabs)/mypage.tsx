@@ -231,6 +231,10 @@ export default function MyPageScreen() {
         Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
     };
 
+    const handleVersionPress = () => {
+        Alert.alert('최신 버전', '현재 최신 버전을 사용하고 있습니다.');
+    };
+
     const handleStatusSubmit = async () => {
         if (!user?.id) {
             Alert.alert('로그인이 필요합니다', '상태메시지를 저장하려면 로그인해주세요.');
@@ -386,14 +390,21 @@ export default function MyPageScreen() {
                 <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/favorites' as any)}>
                     <Text style={styles.settingText}>관심 목록</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem}>
-                    <Text style={styles.settingText}>앱 설정</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem}>
-                    <Text style={styles.settingText}>위치 서비스</Text>
+                <TouchableOpacity style={styles.settingItem} onPress={handleVersionPress}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.settingText}>앱 버전</Text>
+                        <Text style={[styles.settingText, { color: '#999', fontSize: 14 }]}>1.0.0</Text>
+                    </View>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.settingItem} onPress={handleContact}>
                     <Text style={styles.settingText}>문의하기</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/terms' as any)}>
+                    <Text style={styles.settingText}>이용약관</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/privacy' as any)}>
+                    <Text style={styles.settingText}>개인정보 처리방침</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
