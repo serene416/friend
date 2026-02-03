@@ -27,6 +27,7 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
     const [modalVisible, setModalVisible] = useState(false);
     const [midpointText, setMidpointText] = useState('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
     const [loadingMidpoint, setLoadingMidpoint] = useState(false);
+    const [resultLocation, setResultLocation] = useState<string | null>(null);
 
     const selectedCount = selectedFriends.length;
     const selectedFriendProfiles = useMemo(
@@ -60,6 +61,7 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
         }
 
         setMidpointText('완료를 누르면 중앙 위치를 계산해요.');
+        setResultLocation(null);
     }, [modalVisible, participants.length]);
 
     const fetchMidpoint = async () => {
@@ -127,11 +129,15 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
             const data: MidpointHotplaceResponse = await response.json();
             const station = data.chosen_stations?.[0];
             if (station) {
-                setMidpointText(`대략적인 중앙 위치: ${station.original_name} 근처`);
+                const locationText = station.original_name;
+                setMidpointText(`대략적인 중앙 위치: ${locationText} 근처`);
+                setResultLocation(locationText);
             } else {
+                const locationText = `${data.midpoint.lat.toFixed(4)}, ${data.midpoint.lng.toFixed(4)}`;
                 setMidpointText(
-                    `대략적인 중앙 좌표: ${data.midpoint.lat.toFixed(4)}, ${data.midpoint.lng.toFixed(4)}`
+                    `대략적인 중앙 좌표: ${locationText}`
                 );
+                setResultLocation(locationText);
             }
             return true;
         } catch (error: any) {
@@ -156,7 +162,10 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
         <View>
             <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
                 <Text style={styles.buttonText}>
-                    {selectedCount > 0 ? `친구 ${selectedCount}명과 함께` : '함께 놀 친구를 선택하세요'}
+                    {resultLocation
+                        ? `중간 위치 : ${resultLocation}`
+                        : (selectedCount > 0 ? `친구 ${selectedCount}명과 함께` : '함께 놀 친구를 선택하세요')
+                    }
                 </Text>
             </TouchableOpacity>
 
