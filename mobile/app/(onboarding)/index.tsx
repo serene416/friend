@@ -59,5 +59,5 @@ const styles = StyleSheet.create({
     dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ddd', marginHorizontal: 5 },
     activeDot: { backgroundColor: '#333' },
     button: { backgroundColor: '#333', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginBottom: 20 },
-    buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    buttonText: { color: '#fff', fontSize: 16, fontFamily: 'Pretendard-Bold' },
 });

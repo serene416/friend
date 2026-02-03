@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -275,28 +276,61 @@ export default function MyPageScreen() {
         </>
     );
 
+    // Settings Item Component
+    const SettingItem = ({ icon, label, value, onPress }: { icon: string, label: string, value?: string, onPress: () => void }) => (
+        <TouchableOpacity style={styles.settingItem} onPress={onPress}>
+            <View style={styles.settingLeft}>
+                <Ionicons name={icon as any} size={24} color="#333" style={styles.settingIcon} />
+                <Text style={styles.settingText}>{label}</Text>
+            </View>
+            <View style={styles.settingRight}>
+                {value && <Text style={styles.settingValue}>{value}</Text>}
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </View>
+        </TouchableOpacity>
+    );
+
     const renderFooter = () => (
         <View style={styles.section}>
-            <Text style={styles.sectionTitle}>설정</Text>
-            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/favorites' as any)}>
-                <Text style={styles.settingText}>관심 목록</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={handleVersionPress}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={styles.settingText}>앱 버전</Text>
-                    <Text style={[styles.settingText, { color: '#999', fontSize: 14 }]}>1.0.0</Text>
-                </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={handleContact}>
-                <Text style={styles.settingText}>문의하기</Text>
-            </TouchableOpacity>
+            {/* Logo in the middle of standard spacing */}
+            <View style={styles.logoContainer}>
+                <Image
+                    source={require('../../assets/images/icon.png')}
+                    style={styles.middleLogo}
+                    resizeMode="contain"
+                />
+            </View>
 
-            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/terms' as any)}>
-                <Text style={styles.settingText}>이용약관</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/privacy' as any)}>
-                <Text style={styles.settingText}>개인정보 처리방침</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>설정</Text>
+
+            <View style={styles.settingsGroup}>
+                <SettingItem
+                    icon="heart-outline"
+                    label="관심 목록"
+                    onPress={() => router.push('/favorites' as any)}
+                />
+                <SettingItem
+                    icon="information-circle-outline"
+                    label="앱 버전"
+                    value="1.0.0"
+                    onPress={handleVersionPress}
+                />
+                <SettingItem
+                    icon="mail-outline"
+                    label="문의하기"
+                    onPress={handleContact}
+                />
+                <SettingItem
+                    icon="document-text-outline"
+                    label="이용약관"
+                    onPress={() => router.push('/terms' as any)}
+                />
+                <SettingItem
+                    icon="shield-checkmark-outline"
+                    label="개인정보 처리방침"
+                    onPress={() => router.push('/privacy' as any)}
+                />
+            </View>
 
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                 <Text style={styles.logoutText}>로그아웃</Text>
@@ -369,9 +403,23 @@ const styles = StyleSheet.create({
     },
     statusSaveButton: { marginLeft: 8, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#333', borderRadius: 8 },
     statusSaveText: { color: '#fff', fontSize: 12, fontFamily: 'Pretendard-Bold' },
-    section: { marginBottom: 30, marginTop: 150, flex: 1 },
+
+    // Section Styles
+    section: { marginBottom: 30, marginTop: 50, flex: 1 }, // Adjusted margin top since logo takes space
+    logoContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 100, // Explicit height for logo area
+        marginBottom: 50, // Spacing after logo before Settings title
+        opacity: 0.3, // Subtle look
+    },
+    middleLogo: {
+        width: 60,
+        height: 60,
+    },
+
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
+    sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold', marginBottom: 15 },
     addButton: { color: '#007AFF', fontSize: 16, fontFamily: 'Pretendard-Bold' },
     listContent: {},
     friendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
@@ -381,8 +429,51 @@ const styles = StyleSheet.create({
     friendStatus: { fontSize: 14, fontFamily: 'Pretendard-Medium' },
     deleteButton: { padding: 8, backgroundColor: '#fee', borderRadius: 8 },
     deleteText: { color: 'red', fontSize: 12, fontFamily: 'Pretendard-Bold' },
-    settingItem: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
-    settingText: { fontSize: 16, fontFamily: 'Pretendard-Medium' },
-    logoutButton: { marginTop: 20, paddingVertical: 15, alignItems: 'center', backgroundColor: '#f2f2f2', borderRadius: 8 },
+
+    // New Settings Styles matching reference
+    settingsGroup: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        paddingVertical: 8,
+        // Shadow
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        elevation: 1,
+    },
+    settingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+    },
+    settingLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    settingIcon: {
+        width: 24,
+        textAlign: 'center',
+    },
+    settingText: {
+        fontSize: 16,
+        fontFamily: 'Pretendard-Medium',
+        color: '#333'
+    },
+    settingRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    settingValue: {
+        fontSize: 14,
+        color: '#999',
+        fontFamily: 'Pretendard-Medium',
+    },
+
+    logoutButton: { marginTop: 30, paddingVertical: 15, alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 12 },
     logoutText: { color: '#ff3b30', fontSize: 16, fontFamily: 'Pretendard-Bold' },
 });
