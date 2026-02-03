@@ -16,6 +16,8 @@ export default function RootLayout() {
         await Font.loadAsync({
           'Pretendard-Medium': require('../assets/fonts/Pretendard-Medium.otf'),
           'Pretendard-Bold': require('../assets/fonts/Pretendard-Bold.otf'),
+          'Pretendard-ExtraBold': require('../assets/fonts/Pretendard-ExtraBold.otf'),
+          'Pretendard-Black': require('../assets/fonts/Pretendard-Black.otf'),
         });
       } catch (e) {
         console.warn('Error loading fonts:', e);
@@ -42,8 +44,8 @@ export default function RootLayout() {
           name="activity-detail"
           options={{
             headerShown: true,
-            title: "Activity Details",
-            headerBackTitle: "Back"
+            title: "활동 상세",
+            headerBackTitle: "뒤로"
           }}
         />
         <Stack.Screen

@@ -182,7 +182,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", paddingHorizontal: 20 },
   header: { marginTop: 10, marginBottom: 20 },
-  headerTitle: { fontSize: 24, fontFamily: "Pretendard-Bold" },
+  headerTitle: { fontSize: 28, fontFamily: "Pretendard-Black", color: "#000", letterSpacing: -1 },
   weatherCard: {
     backgroundColor: "#fff0f3",
     padding: 16,
