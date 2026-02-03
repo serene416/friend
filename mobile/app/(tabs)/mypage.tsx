@@ -388,14 +388,7 @@ export default function MyPageScreen() {
 
     const renderFooter = () => (
         <View style={styles.section}>
-            {/* Logo in the middle of standard spacing */}
-            <View style={styles.logoContainer}>
-                <Image
-                    source={require('../../assets/images/icon.png')}
-                    style={styles.middleLogo}
-                    resizeMode="contain"
-                />
-            </View>
+
 
             <Text style={styles.sectionTitle}>설정</Text>
 
@@ -501,18 +494,7 @@ const styles = StyleSheet.create({
     statusSaveText: { color: '#fff', fontSize: 12, fontFamily: 'Pretendard-Bold' },
 
     // Section Styles
-    section: { marginBottom: 30, marginTop: 50, flex: 1 }, // Adjusted margin top since logo takes space
-    logoContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 100, // Explicit height for logo area
-        marginBottom: 50, // Spacing after logo before Settings title
-        opacity: 0.3, // Subtle look
-    },
-    middleLogo: {
-        width: 60,
-        height: 60,
-    },
+    section: { marginBottom: 30, marginTop: 150, flex: 1 },
 
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold', marginBottom: 15 },
