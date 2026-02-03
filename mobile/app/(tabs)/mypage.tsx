@@ -319,8 +319,8 @@ export default function MyPageScreen() {
         </View>
     );
 
-    return (
-        <SafeAreaView style={styles.container}>
+    const renderHeader = () => (
+        <>
             {/* Profile Section */}
             <View style={styles.profileCard}>
                 <Image
@@ -361,56 +361,64 @@ export default function MyPageScreen() {
                 </View>
             </View>
 
-            {/* Friend List Section */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}> 친구 목록</Text>
-                    <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
-                        <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
-                    </TouchableOpacity>
+            {/* Friend List Header */}
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}> 친구 목록</Text>
+                <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
+                    <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
+                </TouchableOpacity>
+            </View>
+        </>
+    );
+
+    const renderFooter = () => (
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>설정</Text>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/favorites' as any)}>
+                <Text style={styles.settingText}>관심 목록</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={handleVersionPress}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.settingText}>앱 버전</Text>
+                    <Text style={[styles.settingText, { color: '#999', fontSize: 14 }]}>1.0.0</Text>
                 </View>
-                <FlatList
-                    data={friends}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderFriend}
-                    contentContainerStyle={styles.listContent}
-                    refreshing={isLoadingFriends}
-                    onRefresh={refreshFriends}
-                    ListEmptyComponent={
-                        <Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>
-                            {isLoadingFriends ? '친구 목록을 불러오는 중...' : '친구가 없습니다.'}
-                        </Text>
-                    }
-                />
-            </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={handleContact}>
+                <Text style={styles.settingText}>문의하기</Text>
+            </TouchableOpacity>
 
-            {/* Settings Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>설정</Text>
-                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/favorites' as any)}>
-                    <Text style={styles.settingText}>관심 목록</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem} onPress={handleVersionPress}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={styles.settingText}>앱 버전</Text>
-                        <Text style={[styles.settingText, { color: '#999', fontSize: 14 }]}>1.0.0</Text>
-                    </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem} onPress={handleContact}>
-                    <Text style={styles.settingText}>문의하기</Text>
-                </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/terms' as any)}>
+                <Text style={styles.settingText}>이용약관</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/privacy' as any)}>
+                <Text style={styles.settingText}>개인정보 처리방침</Text>
+            </TouchableOpacity>
 
-                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/terms' as any)}>
-                    <Text style={styles.settingText}>이용약관</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/privacy' as any)}>
-                    <Text style={styles.settingText}>개인정보 처리방침</Text>
-                </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <Text style={styles.logoutText}>로그아웃</Text>
+            </TouchableOpacity>
+            <View style={{ height: 40 }} />
+        </View>
+    );
 
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <Text style={styles.logoutText}>로그아웃</Text>
-                </TouchableOpacity>
-            </View>
+    return (
+        <SafeAreaView style={styles.container}>
+            <FlatList
+                data={friends}
+                keyExtractor={(item) => item.id}
+                renderItem={renderFriend}
+                ListHeaderComponent={renderHeader}
+                ListFooterComponent={renderFooter}
+                contentContainerStyle={styles.listContent}
+                refreshing={isLoadingFriends}
+                onRefresh={refreshFriends}
+                ListEmptyComponent={
+                    <Text style={{ color: '#999', textAlign: 'center', marginTop: 20, marginBottom: 40 }}>
+                        {isLoadingFriends ? '친구 목록을 불러오는 중...' : '친구가 없습니다.'}
+                    </Text>
+                }
+                showsVerticalScrollIndicator={false}
+            />
         </SafeAreaView>
     );
 }
