@@ -53,6 +53,10 @@ export const useFriendStore = create<FriendState>((set) => ({
             name: user.nickname,
             avatar: user.profile_image || `https://i.pravatar.cc/150?u=${user.id}`,
             statusMessage: user.status_message || '',
+            locationName: user.current_location_name || '',
+            latitude: user.current_latitude ?? undefined,
+            longitude: user.current_longitude ?? undefined,
+            locationUpdatedAt: user.current_location_updated_at || undefined,
         }));
         set({ friends });
     },

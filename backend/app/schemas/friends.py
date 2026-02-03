@@ -21,3 +21,7 @@ class FriendshipResponse(BaseModel):
 class FriendRequestAction(BaseModel):
     request_id: UUID
     accept: bool
+
+
+class FriendDeleteResponse(BaseModel):
+    deleted_count: int

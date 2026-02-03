@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "myapp",
-    "slug": "myapp",
+    "name": "오늘 뭐할까",
+    "slug": "today-what-to-do",
     "owner": "appletree30",
     "version": "1.0.0",
     "orientation": "portrait",

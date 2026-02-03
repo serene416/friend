@@ -41,6 +41,10 @@ class User(SQLModel, table=True):
     profile_image: Optional[str] = None
     status_message: Optional[str] = Field(default=None, sa_column=Column(String))
     status_message_expires_at: Optional[datetime] = Field(default=None)
+    current_latitude: Optional[float] = Field(default=None)
+    current_longitude: Optional[float] = Field(default=None)
+    current_location_name: Optional[str] = Field(default=None, sa_column=Column(String))
+    current_location_updated_at: Optional[datetime] = Field(default=None)
     preference_vector: List[float] = Field(default=[], sa_column=Column(ARRAY(Float)))
     kakao_id: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"unique": True})
     created_at: datetime = Field(default_factory=datetime.utcnow)

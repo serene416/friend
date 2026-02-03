@@ -33,6 +33,12 @@ docker-compose up --build
 - **Redis**: `localhost:6381`
 - **MongoDB**: `localhost:27018`
 
+Kakao Local API setup for midpoint hotplace recommendations:
+- Set `KAKAO_REST_API_KEY=<your_kakao_rest_api_key>` in your backend environment (`.env` or Docker env).
+- Optional CORS override: `CORS_ALLOWED_ORIGINS=http://localhost:19006,https://your-ngrok-domain.ngrok-free.app`
+- Restart backend after updating env vars.
+- If the key is missing, `POST /api/v1/recommend/midpoint-hotplaces` returns `503`.
+
 ### 2. Frontend (React Native)
 
 To run the mobile application:
@@ -40,7 +46,7 @@ To run the mobile application:
 ```bash
 cd mobile
 npm install  # Install dependencies (first time only)
-npx expo start
+npm run start:lan
 ```
 
 - Press `i` to open in iOS Simulator (Mac only).
@@ -70,7 +76,8 @@ EXPO_PUBLIC_BACKEND_URL=https://playwithme.ngrok.app npx expo start
 ```
 
 Notes:
-- If you don't set `EXPO_PUBLIC_BACKEND_URL`, the app falls back to the default ngrok domain configured in `mobile/app/(onboarding)/login.tsx`.
+- If you don't set `EXPO_PUBLIC_BACKEND_URL`, the app first tries to infer your current LAN IP from Expo and builds `http://<your-ip>:8000`.
+- For real devices, avoid `EXPO_PUBLIC_BACKEND_URL=http://localhost:8000` in `.env` (it points to the phone itself).
 - If ngrok shows a different URL (no reserved domain), use that URL instead.
 
 ### 2.3 Invite Links (Friend Invite)

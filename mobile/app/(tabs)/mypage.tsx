@@ -1,7 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, Image, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getBackendUrl } from '../../constants/api';
@@ -10,6 +11,21 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useFriendStore } from '../../store/useFriendStore';
 
 const BACKEND_URL = getBackendUrl();
+
+function buildLocationLabel(place: Location.LocationGeocodedAddress) {
+    const parts = [place.region, place.city, place.district ?? place.subregion]
+        .map((part) => (part || '').trim())
+        .filter(Boolean);
+
+    const dedupedParts: string[] = [];
+    for (const part of parts) {
+        if (!dedupedParts.includes(part)) {
+            dedupedParts.push(part);
+        }
+    }
+
+    return dedupedParts.join(' ');
+}
 
 export default function MyPageScreen() {
     const router = useRouter();
@@ -21,6 +37,45 @@ export default function MyPageScreen() {
     const [statusInput, setStatusInput] = useState(user?.statusMessage || '');
     const [isSavingStatus, setIsSavingStatus] = useState(false);
     const [isEditingStatus, setIsEditingStatus] = useState(false);
+    const [deletingFriendId, setDeletingFriendId] = useState<string | null>(null);
+    const lastSyncedLocationRef = useRef('');
+
+    useEffect(() => {
+        lastSyncedLocationRef.current = '';
+    }, [user?.id]);
+
+    const syncCurrentLocation = useCallback(
+        async (latitude: number, longitude: number, locationLabel?: string) => {
+            if (!user?.id) {
+                return;
+            }
+
+            const roundedKey = `${latitude.toFixed(4)}:${longitude.toFixed(4)}:${locationLabel || ''}`;
+            if (lastSyncedLocationRef.current === roundedKey) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/users/location`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: user.id,
+                        latitude,
+                        longitude,
+                        location_name: locationLabel || null,
+                    }),
+                });
+
+                if (response.ok) {
+                    lastSyncedLocationRef.current = roundedKey;
+                }
+            } catch (error) {
+                console.error('Location Sync Error:', error);
+            }
+        },
+        [user?.id]
+    );
 
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
@@ -39,15 +94,25 @@ export default function MyPageScreen() {
                         distanceInterval: 100, // Update every 100 meters
                     },
                     async (location) => {
-                        let geocode = await Location.reverseGeocodeAsync({
-                            latitude: location.coords.latitude,
-                            longitude: location.coords.longitude,
-                        });
+                        try {
+                            const latitude = location.coords.latitude;
+                            const longitude = location.coords.longitude;
+                            let resolvedName: string | undefined;
 
-                        if (geocode.length > 0) {
-                            const place = geocode[0];
-                            const name = `${place.region || ''} ${place.city || ''} ${place.district || ''}`.trim();
-                            setLocationName(name || '위치를 알 수 없음');
+                            const geocode = await Location.reverseGeocodeAsync({
+                                latitude,
+                                longitude,
+                            });
+
+                            if (geocode.length > 0) {
+                                const place = geocode[0];
+                                resolvedName = buildLocationLabel(place) || undefined;
+                            }
+
+                            setLocationName(resolvedName || '위치를 알 수 없음');
+                            await syncCurrentLocation(latitude, longitude, resolvedName);
+                        } catch (error) {
+                            console.error('Location Watch Callback Error:', error);
                         }
                     }
                 );
@@ -62,7 +127,7 @@ export default function MyPageScreen() {
                 subscription.remove();
             }
         };
-    }, []);
+    }, [syncCurrentLocation]);
 
     const refreshFriends = useCallback(async () => {
         if (!user?.id) {
@@ -167,6 +232,10 @@ export default function MyPageScreen() {
         Linking.openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
     };
 
+    const handleVersionPress = () => {
+        Alert.alert('최신 버전', '현재 최신 버전을 사용하고 있습니다.');
+    };
+
     const handleStatusSubmit = async () => {
         if (!user?.id) {
             Alert.alert('로그인이 필요합니다', '상태메시지를 저장하려면 로그인해주세요.');
@@ -197,11 +266,30 @@ export default function MyPageScreen() {
         }
     };
 
-    const handleDeleteFriend = (id: string) => {
-        Alert.alert('친구 삭제', '친구를 삭제하시겠습니까?', [
-            { text: '취소', style: 'cancel' },
-            { text: '삭제', style: 'destructive', onPress: () => removeFriend(id) },
-        ]);
+    const handleDeleteFriend = async (friendId: string) => {
+        if (!user?.id) {
+            Alert.alert('로그인이 필요합니다', '친구를 삭제하려면 로그인해주세요.');
+            return;
+        }
+
+        try {
+            setDeletingFriendId(friendId);
+            const response = await fetch(`${BACKEND_URL}/api/v1/friends?user_id=${user.id}&friend_id=${friendId}`, {
+                method: 'DELETE',
+            });
+
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const message = body?.detail || '친구 삭제에 실패했습니다.';
+                throw new Error(message);
+            }
+
+            removeFriend(friendId);
+        } catch (error: any) {
+            Alert.alert('삭제 실패', error?.message || '알 수 없는 오류가 발생했습니다.');
+        } finally {
+            setDeletingFriendId(null);
+        }
     };
 
     const renderFriend = ({ item }: { item: Friend }) => (
@@ -213,14 +301,27 @@ export default function MyPageScreen() {
                     {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
                 </Text>
             </View>
-            <TouchableOpacity onPress={() => handleDeleteFriend(item.id)} style={styles.deleteButton}>
-                <Text style={styles.deleteText}>삭제</Text>
+            <TouchableOpacity
+                onPress={() =>
+                    Alert.alert('친구 삭제', `${item.name}님을 친구 목록에서 삭제하시겠어요?`, [
+                        { text: '취소', style: 'cancel' },
+                        {
+                            text: '삭제',
+                            style: 'destructive',
+                            onPress: () => handleDeleteFriend(item.id),
+                        },
+                    ])
+                }
+                style={styles.deleteButton}
+                disabled={deletingFriendId === item.id}
+            >
+                <Text style={styles.deleteText}>{deletingFriendId === item.id ? '삭제중' : '삭제'}</Text>
             </TouchableOpacity>
         </View>
     );
 
-    return (
-        <SafeAreaView style={styles.container}>
+    const renderHeader = () => (
+        <>
             {/* Profile Section */}
             <View style={styles.profileCard}>
                 <Image
@@ -261,49 +362,90 @@ export default function MyPageScreen() {
                 </View>
             </View>
 
-            {/* Friend List Section */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}> 친구 목록</Text>
-                    <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
-                        <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
-                    </TouchableOpacity>
-                </View>
-                <FlatList
-                    data={friends}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderFriend}
-                    contentContainerStyle={styles.listContent}
-                    refreshing={isLoadingFriends}
-                    onRefresh={refreshFriends}
-                    ListEmptyComponent={
-                        <Text style={{ color: '#999', textAlign: 'center', marginTop: 20 }}>
-                            {isLoadingFriends ? '친구 목록을 불러오는 중...' : '친구가 없습니다.'}
-                        </Text>
-                    }
+            {/* Friend List Header */}
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>친구 목록</Text>
+                <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
+                    <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
+                </TouchableOpacity>
+            </View>
+        </>
+    );
+
+    // Settings Item Component
+    const SettingItem = ({ icon, label, value, onPress }: { icon: string, label: string, value?: string, onPress: () => void }) => (
+        <TouchableOpacity style={styles.settingItem} onPress={onPress}>
+            <View style={styles.settingLeft}>
+                <Ionicons name={icon as any} size={24} color="#333" style={styles.settingIcon} />
+                <Text style={styles.settingText}>{label}</Text>
+            </View>
+            <View style={styles.settingRight}>
+                {value && <Text style={styles.settingValue}>{value}</Text>}
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </View>
+        </TouchableOpacity>
+    );
+
+    const renderFooter = () => (
+        <View style={styles.section}>
+
+
+            <Text style={styles.sectionTitle}>설정</Text>
+
+            <View style={styles.settingsGroup}>
+                <SettingItem
+                    icon="heart-outline"
+                    label="관심 목록"
+                    onPress={() => router.push('/favorites' as any)}
+                />
+                <SettingItem
+                    icon="information-circle-outline"
+                    label="앱 버전"
+                    value="1.0.0"
+                    onPress={handleVersionPress}
+                />
+                <SettingItem
+                    icon="mail-outline"
+                    label="문의하기"
+                    onPress={handleContact}
+                />
+                <SettingItem
+                    icon="document-text-outline"
+                    label="이용약관"
+                    onPress={() => router.push('/terms' as any)}
+                />
+                <SettingItem
+                    icon="shield-checkmark-outline"
+                    label="개인정보 처리방침"
+                    onPress={() => router.push('/privacy' as any)}
                 />
             </View>
 
-            {/* Settings Section */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>설정</Text>
-                <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/favorites')}>
-                    <Text style={styles.settingText}>관심 목록</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem}>
-                    <Text style={styles.settingText}>앱 설정</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem}>
-                    <Text style={styles.settingText}>위치 서비스</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.settingItem} onPress={handleContact}>
-                    <Text style={styles.settingText}>문의하기</Text>
-                </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <Text style={styles.logoutText}>로그아웃</Text>
+            </TouchableOpacity>
+            <View style={{ height: 40 }} />
+        </View>
+    );
 
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <Text style={styles.logoutText}>로그아웃</Text>
-                </TouchableOpacity>
-            </View>
+    return (
+        <SafeAreaView style={styles.container}>
+            <FlatList
+                data={friends}
+                keyExtractor={(item) => item.id}
+                renderItem={renderFriend}
+                ListHeaderComponent={renderHeader}
+                ListFooterComponent={renderFooter}
+                contentContainerStyle={styles.listContent}
+                refreshing={isLoadingFriends}
+                onRefresh={refreshFriends}
+                ListEmptyComponent={
+                    <Text style={{ color: '#999', textAlign: 'center', marginTop: 20, marginBottom: 40 }}>
+                        {isLoadingFriends ? '친구 목록을 불러오는 중...' : '친구가 없습니다.'}
+                    </Text>
+                }
+                showsVerticalScrollIndicator={false}
+            />
         </SafeAreaView>
     );
 }
@@ -329,7 +471,14 @@ const styles = StyleSheet.create({
     profileTextContainer: { flex: 1 },
     profileName: { fontSize: 22, fontFamily: 'Pretendard-Bold', color: '#1a1a1a', marginBottom: 8 },
     profileLocation: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium', marginBottom: 4 },
-    profileStatusText: { fontSize: 14, color: '#555', fontFamily: 'Pretendard-Medium', paddingVertical: 2 },
+    profileStatusText: {
+        fontSize: 14,
+        color: '#555',
+        fontFamily: 'Pretendard-Medium',
+        paddingVertical: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee'
+    },
     statusInputContainer: { marginTop: 4 },
     statusRow: { flexDirection: 'row', alignItems: 'center' },
     statusInput: {
@@ -343,9 +492,12 @@ const styles = StyleSheet.create({
     },
     statusSaveButton: { marginLeft: 8, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#333', borderRadius: 8 },
     statusSaveText: { color: '#fff', fontSize: 12, fontFamily: 'Pretendard-Bold' },
-    section: { marginBottom: 30, flex: 1 },
+
+    // Section Styles
+    section: { marginBottom: 30, marginTop: 150, flex: 1 },
+
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
+    sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold', marginBottom: 15 },
     addButton: { color: '#007AFF', fontSize: 16, fontFamily: 'Pretendard-Bold' },
     listContent: {},
     friendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
@@ -355,8 +507,51 @@ const styles = StyleSheet.create({
     friendStatus: { fontSize: 14, fontFamily: 'Pretendard-Medium' },
     deleteButton: { padding: 8, backgroundColor: '#fee', borderRadius: 8 },
     deleteText: { color: 'red', fontSize: 12, fontFamily: 'Pretendard-Bold' },
-    settingItem: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
-    settingText: { fontSize: 16, fontFamily: 'Pretendard-Medium' },
-    logoutButton: { marginTop: 20, paddingVertical: 15, alignItems: 'center', backgroundColor: '#f2f2f2', borderRadius: 8 },
+
+    // New Settings Styles matching reference
+    settingsGroup: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        paddingVertical: 8,
+        // Shadow
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        elevation: 1,
+    },
+    settingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+    },
+    settingLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    settingIcon: {
+        width: 24,
+        textAlign: 'center',
+    },
+    settingText: {
+        fontSize: 16,
+        fontFamily: 'Pretendard-Medium',
+        color: '#333'
+    },
+    settingRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    settingValue: {
+        fontSize: 14,
+        color: '#999',
+        fontFamily: 'Pretendard-Medium',
+    },
+
+    logoutButton: { marginTop: 30, paddingVertical: 15, alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 12 },
     logoutText: { color: '#ff3b30', fontSize: 16, fontFamily: 'Pretendard-Bold' },
 });

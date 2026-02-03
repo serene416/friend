@@ -1,6 +1,8 @@
 import logging
+import os
 from fastapi import FastAPI, HTTPException, Request
 from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.db import init_db
@@ -23,6 +25,32 @@ configure_logging()
 logger = logging.getLogger("app")
 
 app = FastAPI(title="Our Today Activity API", lifespan=lifespan)
+
+default_cors_origins = [
+    "http://localhost:19000",
+    "http://localhost:19006",
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "http://127.0.0.1:19000",
+    "http://127.0.0.1:19006",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8081",
+]
+extra_cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+allow_origins = list(dict.fromkeys(default_cors_origins + extra_cors_origins))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_origin_regex=r"https://.*\.ngrok(-free)?\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])

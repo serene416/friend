@@ -11,14 +11,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import FriendSelector from "../../components/FriendSelector";
 import { Activity, MOCK_ACTIVITIES } from "../../constants/data";
 
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useCurrentWeather } from "../../hooks/useCurrentWeather";
 import { useFavoriteStore } from "../../store/useFavoriteStore";
 
 
 
 const WEATHER_THEMES: Record<string, { bg: string, text: string, border?: string }> = {
-  '맑음': { bg: '#81CFEF', text: '#FFFFFF', border: '#FFB2C3' },
+  '맑음': { bg: '#81CFEF', text: '#FFFFFF' },
   '구름많음': { bg: '#A8D8EA', text: '#FFFFFF' },
   '흐림': { bg: '#90AFC5', text: '#FFFFFF' },
   '눈': { bg: '#F8B1C0', text: '#FFFFFF' },
@@ -47,11 +46,25 @@ export default function HomeScreen() {
     ? `현재 하늘: ${data?.skyLabel ?? data?.weatherLabel ?? "알수없음"}`
     : data?.precipitationType ?? "알수없음";
 
-  const getWeatherBackground = (status: string) => {
-    return WEATHER_BG_IMAGES[status] || WEATHER_BG_IMAGES['default'];
+  /* 
+   * Weather label mapping helper
+   * Maps '비/눈', '빗방울' etc. to main categories present in WEATHER_THEMES/IMAGES
+   */
+  const getWeatherKey = (label: string): string => {
+    if (!label) return 'default';
+    if (['비', '빗방울', '비/눈', '빗방울눈날림'].includes(label)) return '비';
+    if (['눈', '눈날림'].includes(label)) return '눈';
+    if (['맑음', '구름많음', '흐림'].includes(label)) return label;
+    return 'default';
   };
 
-  const currentTheme = data ? (WEATHER_THEMES[data.precipitationType] || WEATHER_THEMES['default']) : WEATHER_THEMES['default'];
+  const weatherKey = data ? getWeatherKey(data.weatherLabel) : 'default';
+
+  const getWeatherBackground = () => {
+    return WEATHER_BG_IMAGES[weatherKey] || WEATHER_BG_IMAGES['default'];
+  };
+
+  const currentTheme = WEATHER_THEMES[weatherKey] || WEATHER_THEMES['default'];
 
   const formatValue = (value: number | null, suffix: string) =>
     value === null ? "-" : `${value}${suffix}`;
@@ -80,17 +93,6 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <TouchableOpacity
-        style={styles.heartButton}
-        onPress={() => toggleFavorite(item.id)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <MaterialCommunityIcons
-          name={isFavorite(item.id) ? "heart" : "heart-outline"}
-          size={24}
-          color={isFavorite(item.id) ? "#FF4B4B" : "#666"}
-        />
-      </TouchableOpacity>
     </TouchableOpacity >
   );
 
@@ -106,18 +108,14 @@ export default function HomeScreen() {
           <>
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.headerTitle}> 우리 오늘 뭐 해?</Text>
+              <Text style={styles.headerTitle}> 오늘 뭐할래? </Text>
             </View>
 
             {/* Weather Widget */}
-            <View style={[
-              styles.weatherCard,
-              // Background color is now handled by ImageBackground (fallback logic if needed can be added, but image covers it)
-              currentTheme.border ? { borderWidth: 3, borderColor: currentTheme.border } : null
-            ]}>
+            <View style={styles.weatherCard}>
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24, overflow: 'hidden' }}>
                 <Image
-                  source={data ? getWeatherBackground(data.precipitationType) : WEATHER_BG_IMAGES['default']}
+                  source={data ? getWeatherBackground() : WEATHER_BG_IMAGES['default']}
                   style={{ width: '100%', height: '100%' }}
                   resizeMode="cover"
                 />

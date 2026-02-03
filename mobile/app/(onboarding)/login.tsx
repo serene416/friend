@@ -10,9 +10,9 @@ const KAKAO_JS_KEY = '8723438c42d292525222427c14337829'; // User provided key
 const REDIRECT_URI = 'http://localhost:8081/auth/kakao/callback'; // Dummy URI for interception
 
 // Configure Backend URL
-// Prefer EXPO_PUBLIC_BACKEND_URL if set; fallback to ngrok domain for device testing
-// For Android Emulator use 'http://10.0.2.2:8000'
-// For iOS Simulator use 'http://localhost:8000'
+// 1) Prefer EXPO_PUBLIC_BACKEND_URL (set automatically in npm run start:lan)
+// 2) Otherwise infer from Expo host URI
+// 3) Fallbacks: Android emulator -> 10.0.2.2, iOS simulator -> localhost
 const BACKEND_URL = getBackendUrl();
 
 export default function LoginScreen() {
@@ -107,6 +107,9 @@ export default function LoginScreen() {
                 {/* Debug Info in Dev */}
                 <Text style={styles.debugText}>
                     Redirect URI: {REDIRECT_URI}
+                </Text>
+                <Text style={styles.debugText}>
+                    Backend URL: {BACKEND_URL}
                 </Text>
             </View>
 

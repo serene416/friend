@@ -1,12 +1,131 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getBackendUrl } from '../constants/api';
+import { useAuthStore } from '../store/useAuthStore';
 import { useFriendStore } from '../store/useFriendStore';
 
+const BACKEND_URL = getBackendUrl();
+
+interface MidpointHotplaceResponse {
+    midpoint: {
+        lat: number;
+        lng: number;
+    };
+    chosen_stations: {
+        station_name: string;
+        original_name: string;
+    }[];
+}
+
 export default function FriendSelector() {
-    const { friends, selectedFriends, toggleFriendSelection } = useFriendStore();
+    const { friends, selectedFriends, toggleFriendSelection, loadFriends } = useFriendStore();
+    const user = useAuthStore((state) => state.user);
     const [modalVisible, setModalVisible] = useState(false);
+    const [midpointText, setMidpointText] = useState('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
+    const [loadingMidpoint, setLoadingMidpoint] = useState(false);
 
     const selectedCount = selectedFriends.length;
+    const selectedFriendProfiles = useMemo(
+        () => friends.filter((friend) => selectedFriends.includes(friend.id)),
+        [friends, selectedFriends]
+    );
+    const participants = useMemo(() => {
+        return selectedFriendProfiles
+            .filter(
+                (friend) =>
+                    typeof friend.latitude === 'number' &&
+                    typeof friend.longitude === 'number'
+            )
+            .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
+    }, [selectedFriendProfiles]);
+
+    useEffect(() => {
+        if (!modalVisible) {
+            setLoadingMidpoint(false);
+            return;
+        }
+
+        if (selectedCount < 2) {
+            setLoadingMidpoint(false);
+            setMidpointText('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
+            return;
+        }
+
+        const controller = new AbortController();
+        const fetchMidpoint = async () => {
+            setLoadingMidpoint(true);
+
+            let resolvedParticipants = participants;
+            if (resolvedParticipants.length < 2 && user?.id) {
+                try {
+                    await loadFriends(user.id);
+                    const refreshedFriends = useFriendStore.getState().friends;
+                    const refreshedParticipants = refreshedFriends
+                        .filter((friend) => selectedFriends.includes(friend.id))
+                        .filter(
+                            (friend) =>
+                                typeof friend.latitude === 'number' &&
+                                typeof friend.longitude === 'number'
+                        )
+                        .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
+                    resolvedParticipants = refreshedParticipants;
+                } catch {
+                    // Keep original participant set and show fallback message below.
+                }
+            }
+
+            if (resolvedParticipants.length < 2) {
+                setMidpointText('선택한 친구의 위치 정보가 부족해요. 마이페이지에서 위치를 최신화한 뒤 다시 시도해주세요.');
+                setLoadingMidpoint(false);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/recommend/midpoint-hotplaces`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        participants: resolvedParticipants,
+                        station_limit: 1,
+                        keywords: ['맛집'],
+                        pages: 1,
+                        size: 5,
+                    }),
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    const errorPayload = await response.json().catch(() => ({}));
+                    const detail =
+                        typeof errorPayload?.detail === 'string'
+                            ? errorPayload.detail
+                            : '중앙 위치를 불러오지 못했어요.';
+                    throw new Error(detail);
+                }
+
+                const data: MidpointHotplaceResponse = await response.json();
+                const station = data.chosen_stations?.[0];
+                if (station) {
+                    setMidpointText(`대략적인 중앙 위치: ${station.original_name} 근처`);
+                    return;
+                }
+
+                setMidpointText(
+                    `대략적인 중앙 좌표: ${data.midpoint.lat.toFixed(4)}, ${data.midpoint.lng.toFixed(4)}`
+                );
+            } catch (error: any) {
+                if (error?.name === 'AbortError') {
+                    return;
+                }
+                setMidpointText(error?.message || '중앙 위치를 불러오지 못했어요.');
+            } finally {
+                setLoadingMidpoint(false);
+            }
+        };
+
+        fetchMidpoint();
+        return () => controller.abort();
+    }, [modalVisible, selectedCount, participants, user?.id, loadFriends, selectedFriends]);
 
     return (
         <View>
@@ -25,6 +144,12 @@ export default function FriendSelector() {
                                 <Text style={styles.closeText}>완료</Text>
                             </TouchableOpacity>
                         </View>
+                        <View style={styles.midpointBox}>
+                            <Text style={styles.midpointLabel}>중앙 위치</Text>
+                            <Text style={styles.midpointText}>
+                                {loadingMidpoint ? '중앙 위치 계산 중...' : midpointText}
+                            </Text>
+                        </View>
 
                         <FlatList
                             data={friends}
@@ -41,6 +166,9 @@ export default function FriendSelector() {
                                             <Text style={styles.name}>{item.name}</Text>
                                             <Text style={styles.status}>
                                                 {item.statusMessage ? item.statusMessage : '상태메시지가 없습니다.'}
+                                            </Text>
+                                            <Text style={styles.location}>
+                                                {item.locationName ? item.locationName : '위치 정보가 없습니다.'}
                                             </Text>
                                         </View>
                                         <View style={[styles.checkbox, isSelected && styles.checked]}>
@@ -63,6 +191,17 @@ const styles = StyleSheet.create({
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '70%', padding: 20 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    midpointBox: {
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        marginBottom: 14,
+        backgroundColor: '#F3F8FF',
+        borderWidth: 1,
+        borderColor: '#D8E6FF',
+    },
+    midpointLabel: { fontSize: 12, color: '#2C4A7D', fontFamily: 'Pretendard-Bold', marginBottom: 4 },
+    midpointText: { fontSize: 14, color: '#1D2A3A', fontFamily: 'Pretendard-Medium' },
     title: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
     closeText: { fontSize: 16, color: '#007AFF', fontFamily: 'Pretendard-Bold' },
     item: {
@@ -89,6 +228,7 @@ const styles = StyleSheet.create({
     info: { flex: 1, paddingRight: 8 },
     name: { fontSize: 16, fontFamily: 'Pretendard-Bold', marginBottom: 4 }, // Added spacing
     status: { fontSize: 13, color: '#888', fontFamily: 'Pretendard-Medium' },
+    location: { fontSize: 12, color: '#9a9a9a', fontFamily: 'Pretendard-Medium', marginTop: 2 },
     checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#ddd', justifyContent: 'center', alignItems: 'center' },
     checked: { backgroundColor: '#007AFF', borderColor: '#007AFF' }, // Consistent blue theme
     checkMark: { color: '#fff', fontSize: 14, fontFamily: 'Pretendard-Bold' },

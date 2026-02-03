@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from uuid import UUID
 from typing import Optional, List
+from datetime import datetime
 
 # Token Schemas
 class Token(BaseModel):
@@ -32,6 +33,10 @@ class UserResponse(BaseModel):
     nickname: str
     profile_image: Optional[str] = None
     status_message: Optional[str] = None
+    current_latitude: Optional[float] = None
+    current_longitude: Optional[float] = None
+    current_location_name: Optional[str] = None
+    current_location_updated_at: Optional[datetime] = None
     preference_vector: List[float] = []
 
     class Config:
