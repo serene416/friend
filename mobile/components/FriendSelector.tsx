@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getBackendUrl } from '../constants/api';
 import { useAuthStore } from '../store/useAuthStore';
@@ -28,6 +28,7 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
     const [midpointText, setMidpointText] = useState('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
     const [loadingMidpoint, setLoadingMidpoint] = useState(false);
     const [resultLocation, setResultLocation] = useState<string | null>(null);
+    const midpointRequestInFlight = useRef(false);
 
     const selectedCount = selectedFriends.length;
     const selectedFriendProfiles = useMemo(
@@ -70,12 +71,12 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
             return false;
         }
 
-        if (loadingMidpoint) {
+        if (loadingMidpoint || midpointRequestInFlight.current) {
             return false;
         }
 
         setLoadingMidpoint(true);
-        const controller = new AbortController();
+        midpointRequestInFlight.current = true;
         let resolvedParticipants = participants;
         if (resolvedParticipants.length < 2 && user?.id) {
             try {
@@ -109,12 +110,7 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     participants: resolvedParticipants,
-                    station_limit: 1,
-                    keywords: ['맛집'],
-                    pages: 1,
-                    size: 5,
                 }),
-                signal: controller.signal,
             });
 
             if (!response.ok) {
@@ -123,7 +119,9 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
                     typeof errorPayload?.detail === 'string'
                         ? errorPayload.detail
                         : '중앙 위치를 불러오지 못했어요.';
-                throw new Error(detail);
+                throw new Error(
+                    `검색 중 일부 항목 실패 시 전체 요청이 중단돼요. 잠시 후 다시 시도해주세요. (${detail})`
+                );
             }
 
             const data: MidpointHotplaceResponse = await response.json();
@@ -141,13 +139,12 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
             }
             return true;
         } catch (error: any) {
-            if (error?.name !== 'AbortError') {
-                setMidpointText(error?.message || '중앙 위치를 불러오지 못했어요.');
-            }
+            console.error('[FriendSelector] midpoint-hotplaces request failed', error);
+            setMidpointText(error?.message || '중앙 위치를 불러오지 못했어요.');
             return false;
         } finally {
             setLoadingMidpoint(false);
-            controller.abort();
+            midpointRequestInFlight.current = false;
         }
     };
 

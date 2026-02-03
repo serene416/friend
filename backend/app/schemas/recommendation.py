@@ -110,6 +110,12 @@ class MidpointHotplaceMeta(BaseModel):
     hotplace_count: int
     keyword_request_count: int
     kakao_api_call_count: int
+    executed_keyword_count: int
+    expected_kakao_api_call_count: int
+    actual_kakao_api_call_count: int
+    cache_hit: bool = False
+    cache_backend: str = "memory"
+    cache_ttl_seconds: int = 900
 
 
 class MidpointHotplaceResponse(BaseModel):
