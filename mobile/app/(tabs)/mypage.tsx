@@ -321,7 +321,7 @@ export default function MyPageScreen() {
     );
 
     const renderHeader = () => (
-        <>
+        <View>
             {/* Profile Section */}
             <View style={styles.profileCard}>
                 <Image
@@ -341,6 +341,7 @@ export default function MyPageScreen() {
                         ) : (
                             <View style={styles.statusRow}>
                                 <TextInput
+                                    key="status-message-input"
                                     style={styles.statusInput}
                                     placeholder="상태 메시지 입력"
                                     value={statusInput}
@@ -370,7 +371,7 @@ export default function MyPageScreen() {
                     <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                 </TouchableOpacity>
             </View>
-        </>
+        </View>
     );
 
     // Settings Item Component
