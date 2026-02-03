@@ -165,7 +165,7 @@ export default function HomeScreen() {
 
             {/* Friend Selector */}
             <View style={styles.selectorContainer}>
-              <FriendSelector />
+              <FriendSelector currentLocation={data ? { lat: data.latitude, lng: data.longitude } : undefined} />
             </View>
 
             {/* Recommendations Title */}
