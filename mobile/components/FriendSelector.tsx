@@ -17,7 +17,11 @@ interface MidpointHotplaceResponse {
     }[];
 }
 
-export default function FriendSelector() {
+interface FriendSelectorProps {
+    currentLocation?: { lat: number; lng: number };
+}
+
+export default function FriendSelector({ currentLocation }: FriendSelectorProps) {
     const { friends, selectedFriends, toggleFriendSelection, loadFriends } = useFriendStore();
     const user = useAuthStore((state) => state.user);
     const [modalVisible, setModalVisible] = useState(false);
@@ -30,22 +34,28 @@ export default function FriendSelector() {
         [friends, selectedFriends]
     );
     const participants = useMemo(() => {
-        return selectedFriendProfiles
+        const friendLocations = selectedFriendProfiles
             .filter(
                 (friend) =>
                     typeof friend.latitude === 'number' &&
                     typeof friend.longitude === 'number'
             )
             .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
-    }, [selectedFriendProfiles]);
+
+        if (currentLocation) {
+            return [currentLocation, ...friendLocations];
+        }
+        return friendLocations;
+    }, [selectedFriendProfiles, currentLocation]);
 
     useEffect(() => {
         if (!modalVisible) {
             return;
         }
 
-        if (selectedCount < 2) {
-            setMidpointText('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
+        if (participants.length < 2) {
+            setLoadingMidpoint(false);
+            setMidpointText('친구를 선택하거나 내 위치를 확인해주세요 (최소 2인 필요).');
             return;
         }
 
@@ -64,24 +74,29 @@ export default function FriendSelector() {
 
         setLoadingMidpoint(true);
         const controller = new AbortController();
-        let resolvedParticipants = participants;
-        if (resolvedParticipants.length < 2 && user?.id) {
-            try {
-                await loadFriends(user.id);
-                const refreshedFriends = useFriendStore.getState().friends;
-                const refreshedParticipants = refreshedFriends
-                    .filter((friend) => selectedFriends.includes(friend.id))
-                    .filter(
-                        (friend) =>
-                            typeof friend.latitude === 'number' &&
-                            typeof friend.longitude === 'number'
-                    )
-                    .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
-                resolvedParticipants = refreshedParticipants;
-            } catch {
-                // Keep original participant set and show fallback message below.
+        const fetchMidpoint = async () => {
+            setLoadingMidpoint(true);
+
+            let resolvedParticipants = participants;
+            if (resolvedParticipants.length < 2 && user?.id) {
+                try {
+                    await loadFriends(user.id);
+                    const refreshedFriends = useFriendStore.getState().friends;
+                    const refreshedParticipants = refreshedFriends
+                        .filter((friend) => selectedFriends.includes(friend.id))
+                        .filter(
+                            (friend) =>
+                                typeof friend.latitude === 'number' &&
+                                typeof friend.longitude === 'number'
+                        )
+                        .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
+                    resolvedParticipants = currentLocation
+                        ? [currentLocation, ...refreshedParticipants]
+                        : refreshedParticipants;
+                } catch {
+                    // Keep original participant set and show fallback message below.
+                }
             }
-        }
 
         if (resolvedParticipants.length < 2) {
             setMidpointText('선택한 친구의 위치 정보가 부족해요. 마이페이지에서 위치를 최신화한 뒤 다시 시도해주세요.');
