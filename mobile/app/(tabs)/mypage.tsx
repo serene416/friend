@@ -363,7 +363,7 @@ export default function MyPageScreen() {
 
             {/* Friend List Header */}
             <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}> 친구 목록</Text>
+                <Text style={styles.sectionTitle}>친구 목록</Text>
                 <TouchableOpacity onPress={handleAddFriend} disabled={isCreatingInvite}>
                     <Text style={styles.addButton}>{isCreatingInvite ? '링크 생성 중...' : '+ 친구 추가'}</Text>
                 </TouchableOpacity>
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     },
     statusSaveButton: { marginLeft: 8, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#333', borderRadius: 8 },
     statusSaveText: { color: '#fff', fontSize: 12, fontFamily: 'Pretendard-Bold' },
-    section: { marginBottom: 30, flex: 1 },
+    section: { marginBottom: 30, marginTop: 50, flex: 1 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
     addButton: { color: '#007AFF', fontSize: 16, fontFamily: 'Pretendard-Bold' },
