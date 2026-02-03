@@ -46,11 +46,25 @@ export default function HomeScreen() {
     ? `현재 하늘: ${data?.skyLabel ?? data?.weatherLabel ?? "알수없음"}`
     : data?.precipitationType ?? "알수없음";
 
-  const getWeatherBackground = (status: string) => {
-    return WEATHER_BG_IMAGES[status] || WEATHER_BG_IMAGES['default'];
+  /* 
+   * Weather label mapping helper
+   * Maps '비/눈', '빗방울' etc. to main categories present in WEATHER_THEMES/IMAGES
+   */
+  const getWeatherKey = (label: string): string => {
+    if (!label) return 'default';
+    if (['비', '빗방울', '비/눈', '빗방울눈날림'].includes(label)) return '비';
+    if (['눈', '눈날림'].includes(label)) return '눈';
+    if (['맑음', '구름많음', '흐림'].includes(label)) return label;
+    return 'default';
   };
 
-  const currentTheme = data ? (WEATHER_THEMES[data.precipitationType] || WEATHER_THEMES['default']) : WEATHER_THEMES['default'];
+  const weatherKey = data ? getWeatherKey(data.weatherLabel) : 'default';
+
+  const getWeatherBackground = () => {
+    return WEATHER_BG_IMAGES[weatherKey] || WEATHER_BG_IMAGES['default'];
+  };
+
+  const currentTheme = WEATHER_THEMES[weatherKey] || WEATHER_THEMES['default'];
 
   const formatValue = (value: number | null, suffix: string) =>
     value === null ? "-" : `${value}${suffix}`;
@@ -105,7 +119,7 @@ export default function HomeScreen() {
             ]}>
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24, overflow: 'hidden' }}>
                 <Image
-                  source={data ? getWeatherBackground(data.precipitationType) : WEATHER_BG_IMAGES['default']}
+                  source={data ? getWeatherBackground() : WEATHER_BG_IMAGES['default']}
                   style={{ width: '100%', height: '100%' }}
                   resizeMode="cover"
                 />
