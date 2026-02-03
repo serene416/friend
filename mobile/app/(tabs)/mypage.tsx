@@ -345,6 +345,7 @@ export default function MyPageScreen() {
                                     placeholder="상태 메시지 입력"
                                     value={statusInput}
                                     onChangeText={setStatusInput}
+                                    autoCorrect={false}
                                     autoFocus
                                     returnKeyType="done"
                                     onSubmitEditing={handleStatusSubmit}
@@ -434,8 +435,8 @@ export default function MyPageScreen() {
                 data={friends}
                 keyExtractor={(item) => item.id}
                 renderItem={renderFriend}
-                ListHeaderComponent={renderHeader}
-                ListFooterComponent={renderFooter}
+                ListHeaderComponent={renderHeader()}
+                ListFooterComponent={renderFooter()}
                 contentContainerStyle={styles.listContent}
                 refreshing={isLoadingFriends}
                 onRefresh={refreshFriends}
