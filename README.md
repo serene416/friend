@@ -33,6 +33,12 @@ docker-compose up --build
 - **Redis**: `localhost:6381`
 - **MongoDB**: `localhost:27018`
 
+Kakao Local API setup for midpoint hotplace recommendations:
+- Set `KAKAO_REST_API_KEY=<your_kakao_rest_api_key>` in your backend environment (`.env` or Docker env).
+- Optional CORS override: `CORS_ALLOWED_ORIGINS=http://localhost:19006,https://your-ngrok-domain.ngrok-free.app`
+- Restart backend after updating env vars.
+- If the key is missing, `POST /api/v1/recommend/midpoint-hotplaces` returns `503`.
+
 ### 2. Frontend (React Native)
 
 To run the mobile application:
