@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import * as Location from "expo-location";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getUltraSrtFcstBaseDateTimeKst } from "./getUltraSrtFcstBaseDateTimeKst";
 
 type WeatherData = {
@@ -15,6 +15,8 @@ type WeatherData = {
   baseTime: string;
   nx: number;
   ny: number;
+  latitude: number;
+  longitude: number;
 };
 
 type WeatherState = {
@@ -527,6 +529,8 @@ export const useCurrentWeather = (): WeatherState => {
         baseTime,
         nx,
         ny,
+        latitude,
+        longitude,
       };
 
       cachedWeather = {
