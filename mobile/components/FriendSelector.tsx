@@ -74,29 +74,26 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
 
         setLoadingMidpoint(true);
         const controller = new AbortController();
-        const fetchMidpoint = async () => {
-            setLoadingMidpoint(true);
-
-            let resolvedParticipants = participants;
-            if (resolvedParticipants.length < 2 && user?.id) {
-                try {
-                    await loadFriends(user.id);
-                    const refreshedFriends = useFriendStore.getState().friends;
-                    const refreshedParticipants = refreshedFriends
-                        .filter((friend) => selectedFriends.includes(friend.id))
-                        .filter(
-                            (friend) =>
-                                typeof friend.latitude === 'number' &&
-                                typeof friend.longitude === 'number'
-                        )
-                        .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
-                    resolvedParticipants = currentLocation
-                        ? [currentLocation, ...refreshedParticipants]
-                        : refreshedParticipants;
-                } catch {
-                    // Keep original participant set and show fallback message below.
-                }
+        let resolvedParticipants = participants;
+        if (resolvedParticipants.length < 2 && user?.id) {
+            try {
+                await loadFriends(user.id);
+                const refreshedFriends = useFriendStore.getState().friends;
+                const refreshedParticipants = refreshedFriends
+                    .filter((friend) => selectedFriends.includes(friend.id))
+                    .filter(
+                        (friend) =>
+                            typeof friend.latitude === 'number' &&
+                            typeof friend.longitude === 'number'
+                    )
+                    .map((friend) => ({ lat: friend.latitude as number, lng: friend.longitude as number }));
+                resolvedParticipants = currentLocation
+                    ? [currentLocation, ...refreshedParticipants]
+                    : refreshedParticipants;
+            } catch {
+                // Keep original participant set and show fallback message below.
             }
+        }
 
         if (resolvedParticipants.length < 2) {
             setMidpointText('선택한 친구의 위치 정보가 부족해요. 마이페이지에서 위치를 최신화한 뒤 다시 시도해주세요.');
