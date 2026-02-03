@@ -60,11 +60,11 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
         }
 
         setMidpointText('완료를 누르면 중앙 위치를 계산해요.');
-    }, [modalVisible, selectedCount]);
+    }, [modalVisible, participants.length]);
 
     const fetchMidpoint = async () => {
-        if (selectedCount < 2) {
-            setMidpointText('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
+        if (participants.length < 2) {
+            setMidpointText('친구를 선택하거나 내 위치를 확인해주세요 (최소 2인 필요).');
             return false;
         }
 
