@@ -94,7 +94,7 @@ export default function ActivityDetailScreen() {
   if (!activity) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Activity not found</Text>
+        <Text>활동을 찾을 수 없습니다</Text>
       </SafeAreaView>
     );
   }
@@ -159,44 +159,33 @@ export default function ActivityDetailScreen() {
 
           {/* Description */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About this activity</Text>
+            <Text style={styles.sectionTitle}>활동 소개</Text>
             <Text style={styles.description}>
-              Discover the charm of this location with your friends. Perfect for
-              a day out with stunning views and great memories.
+              {activity.description}
             </Text>
           </View>
 
           {/* Highlights */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Highlights</Text>
-            <View style={styles.highlightItem}>
-              <MaterialCommunityIcons name="camera" size={20} color="#666" />
-              <Text style={styles.highlightText}>Scenic photo spots</Text>
-            </View>
-            <View style={styles.highlightItem}>
-              <MaterialCommunityIcons
-                name="silverware-fork-knife"
-                size={20}
-                color="#666"
-              />
-              <Text style={styles.highlightText}>Great food options</Text>
-            </View>
-            <View style={styles.highlightItem}>
-              <MaterialCommunityIcons name="walk" size={20} color="#666" />
-              <Text style={styles.highlightText}>Easy walking trails</Text>
-            </View>
+            <Text style={styles.sectionTitle}>주요 포인트</Text>
+            {activity.highlights.map((item, index) => (
+              <View key={index} style={styles.highlightItem}>
+                <MaterialCommunityIcons name={item.icon as any} size={20} color="#666" />
+                <Text style={styles.highlightText}>{item.text}</Text>
+              </View>
+            ))}
           </View>
 
           {/* Map Placeholder */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Location & Route</Text>
+              <Text style={styles.sectionTitle}>위치 및 경로</Text>
               <TouchableOpacity
                 style={styles.locationButton}
                 onPress={handleLocationRoutePress}
               >
                 <Text style={styles.locationButtonText}>
-                  {isMapVisible ? "Refresh" : "Show My Location"}
+                  {isMapVisible ? "새로고침" : "내 위치 보기"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -218,10 +207,10 @@ export default function ActivityDetailScreen() {
                 <View style={styles.mapPlaceholderContent}>
                   <MaterialCommunityIcons name="map" size={60} color="#ccc" />
                   <Text style={styles.mapPlaceholderText}>
-                    Tap to load your current location
+                    현재 위치를 불러오려면 누르세요
                   </Text>
                   <Text style={styles.mapPlaceholderSubtext}>
-                    Kakao map will appear here
+                    여기에 지도가 표시됩니다
                   </Text>
                 </View>
               )}
@@ -230,7 +219,7 @@ export default function ActivityDetailScreen() {
 
           {/* Call to Action */}
           <TouchableOpacity style={styles.ctaButton}>
-            <Text style={styles.ctaButtonText}>Invite Friends & Go</Text>
+            <Text style={styles.ctaButtonText}>친구 초대하고 함께 가기</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
