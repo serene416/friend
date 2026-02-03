@@ -163,7 +163,7 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
             <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
                 <Text style={styles.buttonText}>
                     {resultLocation
-                        ? `중간 위치 : ${resultLocation}`
+                        ? resultLocation
                         : (selectedCount > 0 ? `친구 ${selectedCount}명과 함께` : '함께 놀 친구를 선택하세요')
                     }
                 </Text>
