@@ -108,7 +108,7 @@ export default function HomeScreen() {
           <>
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.headerTitle}> 우리 오늘 뭐 해?</Text>
+              <Text style={styles.headerTitle}> 오늘 뭐할래? </Text>
             </View>
 
             {/* Weather Widget */}
