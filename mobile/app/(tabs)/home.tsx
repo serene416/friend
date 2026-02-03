@@ -17,7 +17,7 @@ import { useFavoriteStore } from "../../store/useFavoriteStore";
 
 
 const WEATHER_THEMES: Record<string, { bg: string, text: string, border?: string }> = {
-  '맑음': { bg: '#81CFEF', text: '#FFFFFF', border: '#FFB2C3' },
+  '맑음': { bg: '#81CFEF', text: '#FFFFFF' },
   '구름많음': { bg: '#A8D8EA', text: '#FFFFFF' },
   '흐림': { bg: '#90AFC5', text: '#FFFFFF' },
   '눈': { bg: '#F8B1C0', text: '#FFFFFF' },
@@ -112,11 +112,7 @@ export default function HomeScreen() {
             </View>
 
             {/* Weather Widget */}
-            <View style={[
-              styles.weatherCard,
-              // Background color is now handled by ImageBackground (fallback logic if needed can be added, but image covers it)
-              currentTheme.border ? { borderWidth: 3, borderColor: currentTheme.border } : null
-            ]}>
+            <View style={styles.weatherCard}>
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24, overflow: 'hidden' }}>
                 <Image
                   source={data ? getWeatherBackground() : WEATHER_BG_IMAGES['default']}
