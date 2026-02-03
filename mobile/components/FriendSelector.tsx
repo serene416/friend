@@ -149,6 +149,13 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
     };
 
     const handleCompletePress = async () => {
+        // If less than 2 participants (e.g. just user or 0), just close the modal
+        // because calculation is impossible and user likely wants to exit.
+        if (participants.length < 2) {
+            setModalVisible(false);
+            return;
+        }
+
         const succeeded = await fetchMidpoint();
         if (succeeded) {
             setModalVisible(false);
@@ -167,8 +174,16 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
             </TouchableOpacity>
 
             <Modal visible={modalVisible} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setModalVisible(false)}
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.modalContent}
+                        onPress={(e) => e.stopPropagation()}
+                    >
                         <View style={styles.header}>
                             <Text style={styles.title}>친구 선택</Text>
                             <TouchableOpacity onPress={handleCompletePress} disabled={loadingMidpoint}>
@@ -211,8 +226,8 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
                                 );
                             }}
                         />
-                    </View>
-                </View>
+                    </TouchableOpacity>
+                </TouchableOpacity>
             </Modal>
         </View>
     );
