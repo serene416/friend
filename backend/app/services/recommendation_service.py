@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 
 import httpx
@@ -18,6 +19,8 @@ from app.schemas.recommendation import (
     RecommendationRequest,
 )
 from app.services.kakao_local_service import KakaoLocalService
+
+logger = logging.getLogger("app.recommendation")
 
 
 class RecommendationService:
@@ -163,6 +166,16 @@ class RecommendationService:
     async def get_midpoint_hotplaces(
         self, request: MidpointHotplaceRequest
     ) -> MidpointHotplaceResponse:
+        logger.info(
+            "Midpoint hotplace request: participants=%s station_radius=%s station_limit=%s place_radius=%s keywords=%s size=%s pages=%s",
+            len(request.participants),
+            request.station_radius,
+            request.station_limit,
+            request.place_radius,
+            request.keywords,
+            request.size,
+            request.pages,
+        )
         midpoint = self._calculate_midpoint(request)
 
         async with httpx.AsyncClient(
@@ -186,6 +199,11 @@ class RecommendationService:
             chosen_stations = chosen_stations[: request.station_limit]
 
             if not chosen_stations:
+                logger.info(
+                    "Midpoint hotplace result: no stations found near midpoint=(%.6f, %.6f)",
+                    midpoint.lat,
+                    midpoint.lng,
+                )
                 return MidpointHotplaceResponse(
                     midpoint=midpoint,
                     chosen_stations=[],
@@ -226,6 +244,16 @@ class RecommendationService:
         hotplaces = list(deduped_hotplaces.values())
         hotplaces.sort(
             key=lambda item: (item.distance is None, item.distance if item.distance is not None else 0)
+        )
+
+        logger.info(
+            "Midpoint hotplace result: midpoint=(%.6f, %.6f) stations=%s hotplaces=%s sample_stations=%s sample_hotplaces=%s",
+            midpoint.lat,
+            midpoint.lng,
+            len(chosen_stations),
+            len(hotplaces),
+            [station.original_name for station in chosen_stations[:3]],
+            [hotplace.place_name for hotplace in hotplaces[:5]],
         )
 
         return MidpointHotplaceResponse(
