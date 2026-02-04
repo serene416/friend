@@ -28,7 +28,7 @@ type FavoriteItem = (Activity & { kind: 'mock' }) | FavoriteHotplaceItem;
 
 export default function FavoritesScreen() {
   const router = useRouter();
-  const favorites = useFavoriteStore((state) => state.favorites);
+  const { favorites, toggleFavorite } = useFavoriteStore();
   const recommendation = useRecommendationStore((state) => state.recommendation);
   const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
 
@@ -94,7 +94,17 @@ export default function FavoritesScreen() {
               ))}
             </View>
           </View>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.listHeartButton}
+            onPress={() => toggleFavorite(item.id)}
+          >
+            <MaterialCommunityIcons
+              name="heart"
+              size={24}
+              color="#FF4B4B"
+            />
+          </TouchableOpacity>
+        </TouchableOpacity >
       );
     }
 
@@ -194,5 +204,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Pretendard-Medium',
     color: '#999',
+  },
+
+  listHeartButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    padding: 5,
   },
 });

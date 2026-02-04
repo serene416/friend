@@ -1,5 +1,6 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -12,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import FriendSelector from '../../components/FriendSelector';
 import { Activity, MOCK_ACTIVITIES } from '../../constants/data';
 import { useCurrentWeather } from '../../hooks/useCurrentWeather';
+import { useFavoriteStore } from '../../store/useFavoriteStore';
 import { useRecommendationStore } from '../../store/useRecommendationStore';
 import {
   formatDistanceKm,
@@ -55,6 +57,8 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const { data, loading, error, permissionDenied } = useCurrentWeather();
+  const { toggleFavorite, isFavorite } = useFavoriteStore();
+  const [showFavoritePopup, setShowFavoritePopup] = useState(false);
   const recommendation = useRecommendationStore((state) => state.recommendation);
 
   const isNoPrecipitation = data?.precipitationType === '없음';
@@ -142,6 +146,22 @@ export default function HomeScreen() {
               ))}
             </View>
           </View>
+          <TouchableOpacity
+            style={styles.listHeartButton}
+            onPress={() => {
+              if (!isFavorite(item.id)) {
+                setShowFavoritePopup(true);
+                setTimeout(() => setShowFavoritePopup(false), 3000);
+              }
+              toggleFavorite(item.id);
+            }}
+          >
+            <MaterialCommunityIcons
+              name={isFavorite(item.id) ? "heart" : "heart-outline"}
+              size={24}
+              color={isFavorite(item.id) ? "#FF4B4B" : "#ccc"}
+            />
+          </TouchableOpacity>
         </TouchableOpacity>
       );
     }
@@ -163,13 +183,29 @@ export default function HomeScreen() {
           </View>
           <View style={styles.tags}>
             {item.tags.map((tag, index) => (
-              <View key={`${item.id}-tag-${index}`} style={styles.tag}>
+              <View key={index} style={styles.tag}>
                 <Text style={styles.tagText}>{tag}</Text>
               </View>
             ))}
           </View>
         </View>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.listHeartButton}
+          onPress={() => {
+            if (!isFavorite(item.id)) {
+              setShowFavoritePopup(true);
+              setTimeout(() => setShowFavoritePopup(false), 3000);
+            }
+            toggleFavorite(item.id);
+          }}
+        >
+          <MaterialCommunityIcons
+            name={isFavorite(item.id) ? "heart" : "heart-outline"}
+            size={24}
+            color={isFavorite(item.id) ? "#FF4B4B" : "#ccc"}
+          />
+        </TouchableOpacity>
+      </TouchableOpacity >
     );
   };
 
@@ -264,6 +300,20 @@ export default function HomeScreen() {
           </>
         }
       />
+      {/* Favorite Popup */}
+      {showFavoritePopup && (
+        <View style={styles.popupContainer}>
+          <View style={styles.popupContent}>
+            <Text style={styles.popupText}>관심목록에 추가했어요.</Text>
+            <TouchableOpacity onPress={() => {
+              setShowFavoritePopup(false);
+              router.push('/favorites' as any);
+            }}>
+              <Text style={styles.popupLink}>관심 목록으로 바로보기 &gt;</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -355,5 +405,47 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 4,
   },
-  tagText: { fontSize: 12, color: '#555', fontFamily: 'Pretendard-Medium' },
+  tagText: { fontSize: 12, color: "#555", fontFamily: "Pretendard-Medium" },
+  listHeartButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    // backgroundColor: '#fff', // Optional: if we want a background circle
+    // borderRadius: 20,
+    padding: 5,
+  },
+  popupContainer: {
+    position: 'absolute',
+    bottom: 30, // Above tab bar if present, or just bottom
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  popupContent: {
+    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  popupText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Pretendard-Medium',
+  },
+  popupLink: {
+    color: '#FF4B4B',
+    fontSize: 14,
+    fontFamily: 'Pretendard-Bold',
+    marginLeft: 10,
+  },
 });

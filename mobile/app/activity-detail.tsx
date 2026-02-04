@@ -74,25 +74,25 @@ export default function ActivityDetailScreen() {
 
   const highlightItems = hotplace
     ? [
-        {
-          icon: 'train',
-          text: hotplace.source_station ? `${hotplace.source_station} 인근 추천` : '중앙 위치 기반 추천',
-        },
-        {
-          icon: 'map-marker-radius',
-          text: formatDistanceKm(distanceKm),
-        },
-        {
-          icon: 'tag',
-          text: hotplace.source_keyword || category,
-        },
-      ]
+      {
+        icon: 'train',
+        text: hotplace.source_station ? `${hotplace.source_station} 인근 추천` : '중앙 위치 기반 추천',
+      },
+      {
+        icon: 'map-marker-radius',
+        text: formatDistanceKm(distanceKm),
+      },
+      {
+        icon: 'tag',
+        text: hotplace.source_keyword || category,
+      },
+    ]
     : activity?.highlights ?? [];
 
   const tags = hotplace
     ? [category, hotplace.source_keyword, hotplace.category_name].filter(
-        (tag): tag is string => typeof tag === 'string' && tag.trim().length > 0
-      )
+      (tag): tag is string => typeof tag === 'string' && tag.trim().length > 0
+    )
     : activity?.tags ?? [];
 
   const description = hotplace
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     position: 'absolute',
-    top: 20,
+    bottom: 20,
     right: 20,
     zIndex: 1,
     // backgroundColor: 'rgba(0,0,0,0.3)', // Removed dark background
