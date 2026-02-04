@@ -26,3 +26,29 @@ class PlaceReview(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+class PlacePhoto(BaseModel):
+    id: Optional[str] = Field(alias="_id", default=None)
+    place_id: Optional[str] = None
+    kakao_place_id: str
+    image_url: str
+    source: str
+    captured_at: datetime = Field(default_factory=datetime.utcnow)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        populate_by_name = True
+
+
+class PlaceTrendRaw(BaseModel):
+    id: Optional[str] = Field(alias="_id", default=None)
+    kakao_place_id: str
+    source: str
+    window_days: int
+    count: int
+    sampled_at: datetime = Field(default_factory=datetime.utcnow)
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        populate_by_name = True

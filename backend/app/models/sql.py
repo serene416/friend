@@ -28,6 +28,20 @@ class TaskType(str, enum.Enum):
     TREND_ANALYSIS = "TREND_ANALYSIS"
     RECOMMENDATION = "RECOMMENDATION"
 
+class IngestionJobStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+
+class IngestionItemStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+
 # Link Table for Group Members
 class UserGroupLink(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="user.id", primary_key=True)
@@ -106,3 +120,56 @@ class AITask(SQLModel, table=True):
     result: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class IngestionJob(SQLModel, table=True):
+    __tablename__ = "ingestion_job"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    source: str = Field(default="midpoint")
+    status: IngestionJobStatus = Field(
+        default=IngestionJobStatus.PENDING,
+        sa_column=Column(Enum(IngestionJobStatus, name="ingestion_job_status"), nullable=False),
+    )
+    total_items: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    completed_items: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    failed_items: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    request_payload: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+    meta: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class IngestionJobItem(SQLModel, table=True):
+    __tablename__ = "ingestion_job_item"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    job_id: UUID = Field(index=True)
+    kakao_place_id: str = Field(index=True)
+    place_name: Optional[str] = Field(default=None, sa_column=Column(String))
+    x: Optional[float] = None
+    y: Optional[float] = None
+    source_keyword: Optional[str] = Field(default=None, sa_column=Column(String))
+    source_station: Optional[str] = Field(default=None, sa_column=Column(String))
+    status: IngestionItemStatus = Field(
+        default=IngestionItemStatus.PENDING,
+        sa_column=Column(Enum(IngestionItemStatus, name="ingestion_item_status"), nullable=False),
+    )
+    error_message: Optional[str] = Field(default=None, sa_column=Column(String))
+    retry_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PlaceIngestionFeature(SQLModel, table=True):
+    __tablename__ = "place_ingestion_feature"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    place_id: Optional[UUID] = Field(default=None, index=True)
+    kakao_place_id: str = Field(index=True, sa_column_kwargs={"unique": True})
+    latest_review_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    latest_photo_count: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0))
+    instagram_post_freq_7d: float = Field(default=0.0, sa_column=Column(Float, nullable=False, default=0.0))
+    instagram_post_freq_30d: float = Field(default=0.0, sa_column=Column(Float, nullable=False, default=0.0))
+    last_ingested_at: Optional[datetime] = Field(default=None)
+    feature_payload: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))

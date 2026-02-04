@@ -35,6 +35,9 @@ docker-compose up --build
 
 Kakao Local API setup for midpoint hotplace recommendations:
 - Set `KAKAO_REST_API_KEY=<your_kakao_rest_api_key>` in your backend environment (`.env` or Docker env).
+- Optional debug logs: set `MIDPOINT_LOG_FULL_KAKAO_RESULTS=true` to print full Kakao station/keyword documents and mapped category/activity info in backend logs.
+- Optional ingestion enqueue: set `MIDPOINT_ENABLE_INGESTION_ENQUEUE=true` to create async ingestion jobs after midpoint recommendations are finalized.
+- Optional dedicated Celery broker URL: set `CELERY_BROKER_URL=redis://...` (if omitted, services fall back to `REDIS_URL`).
 - Optional CORS override: `CORS_ALLOWED_ORIGINS=http://localhost:19006,https://your-ngrok-domain.ngrok-free.app`
 - Restart backend after updating env vars.
 - If the key is missing, `POST /api/v1/recommend/midpoint-hotplaces` returns `503`.
@@ -120,6 +123,21 @@ The AI Service is configured to run in a secure environment with limited ports (
 - It connects to the internal PostgreSQL DB.
 - Polls the `aitask` table for `PENDING` tasks using `SELECT ... FOR UPDATE SKIP LOCKED`.
 - This ensures no direct external access to the GPU worker is required.
+
+## Internal Ingestion API (Stage 2)
+
+The backend now exposes internal ingestion endpoints:
+- `POST /api/v1/internal/ingestion/jobs`  
+  Creates a new ingestion job from an explicit hotplace list and enqueues the Celery task.
+- `GET /api/v1/internal/ingestion/jobs/{job_id}`  
+  Returns current ingestion job status and item counters.
+
+Current crawler behavior is intentionally placeholder-only:
+- `worker/crawlers/naver_place.py`
+- `worker/crawlers/instagram.py`
+
+These adapters return deterministic fake data so the pipeline is runnable end-to-end.  
+To implement real crawling logic, fill in the TODOs in those files (auth/session handling, selectors/parsing, and rate-limit/backoff policy).
 
 ## Tech Stack
 
