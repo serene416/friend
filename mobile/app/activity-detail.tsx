@@ -22,6 +22,7 @@ export default function ActivityDetailScreen() {
   const { id } = useLocalSearchParams();
   const activityId = typeof id === 'string' ? id : id?.[0] ?? '';
   const { toggleFavorite, isFavorite } = useFavoriteStore();
+  const [showFavoritePopup, setShowFavoritePopup] = useState(false);
 
   const [location, setLocation] = useState<{
     latitude: number;
@@ -107,7 +108,13 @@ export default function ActivityDetailScreen() {
           <Image source={{ uri: activity.image }} style={styles.heroImage} />
           <TouchableOpacity
             style={styles.favoriteButton}
-            onPress={() => toggleFavorite(activityId)}
+            onPress={() => {
+              if (!isFavorite(activityId)) {
+                setShowFavoritePopup(true);
+                setTimeout(() => setShowFavoritePopup(false), 3000);
+              }
+              toggleFavorite(activityId);
+            }}
           >
             <MaterialCommunityIcons
               name={isFavorite(activityId) ? "heart" : "heart-outline"}
@@ -223,6 +230,21 @@ export default function ActivityDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Favorite Popup */}
+      {showFavoritePopup && (
+        <View style={styles.popupContainer}>
+          <View style={styles.popupContent}>
+            <Text style={styles.popupText}>관심목록에 추가했어요.</Text>
+            <TouchableOpacity onPress={() => {
+              setShowFavoritePopup(false);
+              router.push('/favorites' as any);
+            }}>
+              <Text style={styles.popupLink}>관심 목록으로 바로보기 &gt;</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -247,8 +269,8 @@ const styles = StyleSheet.create({
     top: 20,
     right: 20,
     zIndex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
+    // backgroundColor: 'rgba(0,0,0,0.3)', // Removed dark background
+    // borderRadius: 20,
     padding: 8,
   },
   infoContainer: {
@@ -381,5 +403,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Pretendard-Bold",
     color: "#fff",
+  },
+  popupContainer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  popupContent: {
+    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  popupText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Pretendard-Medium',
+  },
+  popupLink: {
+    color: '#FF4B4B',
+    fontSize: 14,
+    fontFamily: 'Pretendard-Bold',
+    marginLeft: 10,
   },
 });
