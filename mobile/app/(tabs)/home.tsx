@@ -229,7 +229,7 @@ export default function HomeScreen() {
         ListEmptyComponent={
           selectedFriends.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>친구를 선택해주세요</Text>
+              <Text style={styles.emptyText}>오늘 누구랑 놀까요? 친구를 선택해보세요! 🥳</Text>
             </View>
           ) : null
         }
