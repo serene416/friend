@@ -1,13 +1,8 @@
 import KakaoMap from '@/components/KakaoMap';
 import { MOCK_ACTIVITIES } from '@/constants/data';
 import { useFavoriteStore } from '@/store/useFavoriteStore';
-import { useRecommendationStore } from '@/store/useRecommendationStore';
 import {
-  formatDistanceKm,
-  getDistanceKmFromCurrentLocation,
-  getHotplaceImageUrl,
-  mapSourceKeywordToPlayCategory,
-  metersToKm,
+  formatDistanceKm
 } from '@/utils/recommendation';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -43,55 +38,18 @@ export default function ActivityDetailScreen() {
   const activityId = useMemo(() => parseIdParam(id), [id]);
 
   const { toggleFavorite, isFavorite } = useFavoriteStore();
-  const recommendation = useRecommendationStore((state) => state.recommendation);
-  const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
+  const [showFavoritePopup, setShowFavoritePopup] = useState(false);
 
-  const [isOpeningPlaceUrl, setIsOpeningPlaceUrl] = useState(false);
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [isMapVisible, setIsMapVisible] = useState(false);
+  const isFetchingLocationRef = useRef(false);
 
-  const hotplaceFromLatest = useMemo(
-    () => recommendation?.hotplaces.find((place) => place.kakao_place_id === activityId),
-    [activityId, recommendation?.hotplaces]
-  );
-  const hotplace = hotplaceFromLatest ?? (activityId ? getHotplaceById(activityId) : undefined);
-  const activity = useMemo(
-    () => MOCK_ACTIVITIES.find((item) => item.id === activityId),
-    [activityId]
-  );
-
-  const currentLocation = recommendation?.currentLocation ?? null;
-  const category = hotplace
-    ? mapSourceKeywordToPlayCategory(hotplace.source_keyword, hotplace.category_name)
-    : activity?.tags?.[0] ?? '기타';
-
-  const distanceKm = hotplace
-    ? getDistanceKmFromCurrentLocation(hotplace, currentLocation) ?? metersToKm(hotplace.distance)
-    : activity?.distance ?? null;
-
-  const title = hotplace?.place_name ?? activity?.title ?? '활동 정보 없음';
-  const heroImage = hotplace
-    ? getHotplaceImageUrl(hotplace.kakao_place_id)
-    : activity?.image ?? getHotplaceImageUrl(`fallback-${activityId || 'unknown'}`);
-
-  const highlightItems = hotplace
-    ? [
-        {
-          icon: 'train',
-          text: hotplace.source_station ? `${hotplace.source_station} 인근 추천` : '중앙 위치 기반 추천',
-        },
-        {
-          icon: 'map-marker-radius',
-          text: formatDistanceKm(distanceKm),
-        },
-        {
-          icon: 'tag',
-          text: hotplace.source_keyword || category,
-        },
-      ]
-    : activity?.highlights ?? [];
-
-  const tags = hotplace
-    ? Array.from(new Set([category, hotplace.source_keyword, hotplace.category_name].filter(Boolean)))
-    : activity?.tags ?? [];
+  const activity = MOCK_ACTIVITIES.find((a) => a.id === id);
 
   const description = hotplace
     ? `${title}은(는) 친구들과의 중간 지점을 기준으로 추천된 장소예요. 카테고리: ${category}.`
@@ -150,7 +108,13 @@ export default function ActivityDetailScreen() {
           <Image source={{ uri: heroImage }} style={styles.heroImage} />
           <TouchableOpacity
             style={styles.favoriteButton}
-            onPress={() => toggleFavorite(activityId)}
+            onPress={() => {
+              if (!isFavorite(activityId)) {
+                setShowFavoritePopup(true);
+                setTimeout(() => setShowFavoritePopup(false), 3000);
+              }
+              toggleFavorite(activityId);
+            }}
           >
             <MaterialCommunityIcons
               name={isFavorite(activityId) ? 'heart' : 'heart-outline'}
@@ -240,6 +204,21 @@ export default function ActivityDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Favorite Popup */}
+      {showFavoritePopup && (
+        <View style={styles.popupContainer}>
+          <View style={styles.popupContent}>
+            <Text style={styles.popupText}>관심목록에 추가했어요.</Text>
+            <TouchableOpacity onPress={() => {
+              setShowFavoritePopup(false);
+              router.push('/favorites' as any);
+            }}>
+              <Text style={styles.popupLink}>관심 목록으로 바로보기 &gt;</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -286,8 +265,8 @@ const styles = StyleSheet.create({
     top: 20,
     right: 20,
     zIndex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
+    // backgroundColor: 'rgba(0,0,0,0.3)', // Removed dark background
+    // borderRadius: 20,
     padding: 8,
   },
   infoContainer: {
@@ -423,7 +402,41 @@ const styles = StyleSheet.create({
   },
   ctaButtonText: {
     fontSize: 16,
-    fontFamily: 'Pretendard-Bold',
+    fontFamily: "Pretendard-Bold",
+    color: "#fff",
+  },
+  popupContainer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  popupContent: {
+    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  popupText: {
     color: '#fff',
+    fontSize: 14,
+    fontFamily: 'Pretendard-Medium',
+  },
+  popupLink: {
+    color: '#FF4B4B',
+    fontSize: 14,
+    fontFamily: 'Pretendard-Bold',
+    marginLeft: 10,
   },
 });
