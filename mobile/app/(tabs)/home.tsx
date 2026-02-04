@@ -105,7 +105,10 @@ export default function HomeScreen() {
         kind: 'hotplace',
         id: hotplace.kakao_place_id,
         title: hotplace.place_name,
-        image: getHotplaceImageUrl(hotplace.kakao_place_id),
+        image:
+          hotplace.representative_image_url ??
+          hotplace.photo_urls?.[0] ??
+          getHotplaceImageUrl(hotplace.kakao_place_id),
         distanceLabel: formatDistanceKm(distanceKm),
         category: mapSourceKeywordToPlayCategory(
           hotplace.source_keyword,

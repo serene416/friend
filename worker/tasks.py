@@ -11,7 +11,7 @@ from pymongo import MongoClient
 from pymongo.errors import AutoReconnect, PyMongoError
 
 from crawlers.instagram import crawl_instagram_trend
-from crawlers.naver_place import crawl_naver_photos, crawl_naver_reviews
+from crawlers.naver_place import crawl_naver_place_bundle
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -123,6 +123,19 @@ def _set_item_failed(cursor, item_id: str, error_message: str) -> None:
     )
 
 
+def _set_item_skipped(cursor, item_id: str, reason: str) -> None:
+    cursor.execute(
+        """
+        UPDATE ingestion_job_item
+        SET status = 'SKIPPED',
+            error_message = %s,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (reason[:1000], item_id),
+    )
+
+
 def _write_raw_to_mongo(
     mongo_db,
     job_id: str,
@@ -188,11 +201,13 @@ def _upsert_place_ingestion_feature(
     reviews: list[dict[str, Any]],
     photos: list[dict[str, Any]],
     trend_payload: dict[str, Any],
+    naver_mapping_payload: dict[str, Any] | None = None,
 ) -> None:
     feature_payload = {
         "latest_review_sample": reviews,
         "latest_photo_sample": photos,
         "instagram_raw": trend_payload,
+        "naver_mapping": naver_mapping_payload or {},
         "source_keyword": item.get("source_keyword"),
         "source_station": item.get("source_station"),
     }
@@ -267,6 +282,7 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
     mongo_client, mongo_db = _get_mongo_client_and_db()
     completed_items = 0
     failed_items = 0
+    skipped_items = 0
     total_items = 0
 
     try:
@@ -286,8 +302,15 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
                     with pg_conn.cursor() as cursor:
                         _set_item_status(cursor, item_id, "PROCESSING")
 
-                reviews = crawl_naver_reviews(item["kakao_place_id"], item.get("place_name"))
-                photos = crawl_naver_photos(item["kakao_place_id"], item.get("place_name"))
+                naver_bundle = crawl_naver_place_bundle(
+                    kakao_place_id=item["kakao_place_id"],
+                    place_name=item.get("place_name"),
+                    x=item.get("x"),
+                    y=item.get("y"),
+                )
+                reviews = naver_bundle.get("reviews", [])
+                photos = naver_bundle.get("photos", [])
+                naver_mapping = naver_bundle.get("mapping", {}) or {}
                 trend_payload = crawl_instagram_trend(item["kakao_place_id"], item.get("place_name"))
 
                 _write_raw_to_mongo(
@@ -307,8 +330,17 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
                             reviews=reviews,
                             photos=photos,
                             trend_payload=trend_payload,
+                            naver_mapping_payload=naver_mapping,
                         )
-                        _set_item_status(cursor, item_id, "COMPLETED")
+                        if naver_bundle.get("status") == "SKIPPED":
+                            _set_item_skipped(
+                                cursor,
+                                item_id,
+                                naver_bundle.get("skip_reason") or "naver_target_unavailable",
+                            )
+                            skipped_items += 1
+                        else:
+                            _set_item_status(cursor, item_id, "COMPLETED")
 
                 completed_items += 1
             except PyMongoError:
@@ -337,12 +369,13 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
                 )
 
         logger.info(
-            "Finished ingestion job job_id=%s status=%s total=%s completed=%s failed=%s",
+            "Finished ingestion job job_id=%s status=%s total=%s completed=%s failed=%s skipped=%s",
             job_id,
             final_status,
             total_items,
             completed_items,
             failed_items,
+            skipped_items,
         )
         return {
             "job_id": job_id,

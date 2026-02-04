@@ -45,12 +45,33 @@ const normalizeStation = (station: MidpointStation): MidpointStation => ({
   y: isFiniteNumber(station.y) ? station.y : 0,
 });
 
-const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => ({
-  ...hotplace,
-  distance: isFiniteNumber(hotplace.distance) ? hotplace.distance : null,
-  x: isFiniteNumber(hotplace.x) ? hotplace.x : 0,
-  y: isFiniteNumber(hotplace.y) ? hotplace.y : 0,
-});
+const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => {
+  const photoUrls = Array.isArray(hotplace.photo_urls)
+    ? Array.from(
+      new Set(
+        hotplace.photo_urls
+          .filter((url): url is string => typeof url === 'string' && url.startsWith('http'))
+          .map((url) => url.trim())
+          .filter((url) => url.length > 0)
+      )
+    ).slice(0, 5)
+    : [];
+
+  const representative =
+    typeof hotplace.representative_image_url === 'string' &&
+      hotplace.representative_image_url.startsWith('http')
+      ? hotplace.representative_image_url
+      : photoUrls[0] ?? null;
+
+  return {
+    ...hotplace,
+    distance: isFiniteNumber(hotplace.distance) ? hotplace.distance : null,
+    x: isFiniteNumber(hotplace.x) ? hotplace.x : 0,
+    y: isFiniteNumber(hotplace.y) ? hotplace.y : 0,
+    photo_urls: photoUrls,
+    representative_image_url: representative,
+  };
+};
 
 export const useRecommendationStore = create<RecommendationState>()(
   persist(

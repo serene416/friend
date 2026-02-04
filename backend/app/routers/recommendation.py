@@ -27,8 +27,9 @@ async def recommend_places(
 @router.post("/midpoint-hotplaces", response_model=MidpointHotplaceResponse)
 async def recommend_midpoint_hotplaces(
     request: MidpointHotplaceRequest,
+    session: SessionDep,
 ):
-    return await rec_service.get_midpoint_hotplaces(request)
+    return await rec_service.get_midpoint_hotplaces(request, session=session)
 
 @router.post("/seed", status_code=201)
 async def seed_place(place: Place, session: SessionDep):

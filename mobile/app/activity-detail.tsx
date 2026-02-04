@@ -11,15 +11,18 @@ import {
 } from '@/utils/recommendation';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
   Linking,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -47,6 +50,8 @@ export default function ActivityDetailScreen() {
   const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
   const [isOpeningPlaceUrl, setIsOpeningPlaceUrl] = useState(false);
   const [showFavoritePopup, setShowFavoritePopup] = useState(false);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const { width: windowWidth } = useWindowDimensions();
 
   const hotplaceFromLatest = useMemo(
     () => recommendation?.hotplaces.find((place) => place.kakao_place_id === activityId),
@@ -68,9 +73,18 @@ export default function ActivityDetailScreen() {
     : activity?.distance ?? null;
 
   const title = hotplace?.place_name ?? activity?.title ?? '활동 정보 없음';
-  const heroImage = hotplace
-    ? getHotplaceImageUrl(hotplace.kakao_place_id)
+  const fallbackHeroImage = hotplace
+    ? hotplace.representative_image_url ?? getHotplaceImageUrl(hotplace.kakao_place_id)
     : activity?.image ?? getHotplaceImageUrl(`fallback-${activityId || 'unknown'}`);
+  const photoGallery = useMemo(
+    () =>
+      hotplace?.photo_urls
+        ?.filter((url): url is string => typeof url === 'string' && url.startsWith('http'))
+        .slice(0, 5) ?? [],
+    [hotplace?.photo_urls]
+  );
+  const galleryImages = photoGallery.length > 0 ? photoGallery : [fallbackHeroImage];
+  const heroImageWidth = Math.max(windowWidth - 0.1, 1);
 
   const highlightItems = hotplace
     ? [
@@ -98,6 +112,23 @@ export default function ActivityDetailScreen() {
   const description = hotplace
     ? `${title}은(는) 친구들과의 중간 지점을 기준으로 추천된 장소예요. 카테고리: ${category}.`
     : activity?.description ?? '활동 정보를 준비 중입니다.';
+
+  useEffect(() => {
+    setActivePhotoIndex(0);
+  }, [activityId]);
+
+  const handlePhotoScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (galleryImages.length <= 1) {
+        setActivePhotoIndex(0);
+        return;
+      }
+      const nextIndex = Math.round(event.nativeEvent.contentOffset.x / heroImageWidth);
+      const normalizedIndex = Math.min(Math.max(nextIndex, 0), galleryImages.length - 1);
+      setActivePhotoIndex(normalizedIndex);
+    },
+    [galleryImages.length, heroImageWidth]
+  );
 
   const handleOpenPlaceUrl = useCallback(async () => {
     if (!hotplace?.place_url) {
@@ -149,7 +180,31 @@ export default function ActivityDetailScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.imageContainer}>
-          <Image source={{ uri: heroImage }} style={styles.heroImage} />
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handlePhotoScrollEnd}
+            style={styles.imagePager}
+          >
+            {galleryImages.map((imageUri, index) => (
+              <Image
+                key={`${activityId || title}-${index}`}
+                source={{ uri: imageUri }}
+                style={[styles.heroImage, { width: heroImageWidth }]}
+              />
+            ))}
+          </ScrollView>
+          {galleryImages.length > 1 && (
+            <View style={styles.paginationContainer}>
+              {galleryImages.map((_, index) => (
+                <View
+                  key={`pagination-${index}`}
+                  style={[styles.paginationDot, index === activePhotoIndex && styles.paginationDotActive]}
+                />
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.infoContainer}>
@@ -303,10 +358,32 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 300,
   },
-  heroImage: {
+  imagePager: {
     width: '100%',
     height: '100%',
+  },
+  heroImage: {
+    height: '100%',
     backgroundColor: '#eee',
+  },
+  paginationContainer: {
+    position: 'absolute',
+    bottom: 14,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  paginationDotActive: {
+    backgroundColor: '#fff',
   },
   infoContainer: {
     paddingHorizontal: 20,
