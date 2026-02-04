@@ -14,6 +14,7 @@ import FriendSelector from '../../components/FriendSelector';
 import { Activity, MOCK_ACTIVITIES } from '../../constants/data';
 import { useCurrentWeather } from '../../hooks/useCurrentWeather';
 import { useFavoriteStore } from '../../store/useFavoriteStore';
+import { useFriendStore } from '../../store/useFriendStore';
 import { useRecommendationStore } from '../../store/useRecommendationStore';
 import {
   formatDistanceKm,
@@ -58,6 +59,7 @@ export default function HomeScreen() {
 
   const { data, loading, error, permissionDenied } = useCurrentWeather();
   const { toggleFavorite, isFavorite, favorites } = useFavoriteStore();
+  const { selectedFriends } = useFriendStore();
   const [showFavoritePopup, setShowFavoritePopup] = useState(false);
   const recommendation = useRecommendationStore((state) => state.recommendation);
 
@@ -119,7 +121,9 @@ export default function HomeScreen() {
     []
   );
 
-  const recommendationItems = hotplaceItems.length > 0 ? hotplaceItems : fallbackItems;
+  const recommendationItems = selectedFriends.length > 0
+    ? (hotplaceItems.length > 0 ? hotplaceItems : fallbackItems)
+    : [];
 
   const renderItem = ({ item }: { item: HomeCardItem }) => {
     if (item.kind === 'hotplace') {
@@ -222,6 +226,13 @@ export default function HomeScreen() {
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          selectedFriends.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>친구를 선택해주세요</Text>
+            </View>
+          ) : null
+        }
         ListHeaderComponent={
           <>
             <View style={styles.header}>
@@ -455,5 +466,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Pretendard-Bold',
     marginLeft: 10,
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#aaa',
+    fontFamily: 'Pretendard-Medium',
   },
 });
