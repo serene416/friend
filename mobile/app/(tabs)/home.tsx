@@ -299,7 +299,7 @@ export default function HomeScreen() {
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
-                {hotplaceItems.length > 0 ? '중앙 위치 기반 추천 활동' : '오늘의 추천 활동'}
+                {hotplaceItems.length > 0 ? '위치 기반 추천 활동' : '오늘의 추천 활동'}
               </Text>
             </View>
           </>
