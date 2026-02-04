@@ -325,7 +325,7 @@ export default function HomeScreen() {
               setShowFavoritePopup(false);
               router.push('/favorites' as any);
             }}>
-              <Text style={styles.popupLink}>관심 목록으로 바로보기 &gt;</Text>
+              <Text style={styles.popupLink}>관심목록 보기</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
   },
   popupContent: {
     backgroundColor: 'rgba(30, 30, 30, 0.9)',
-    borderRadius: 24,
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 20,
     flexDirection: 'row',
