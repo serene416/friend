@@ -30,6 +30,15 @@ export default function TabLayout() {
         })}
       />
       <Tabs.Screen
+        name="my-map"
+        options={{
+          title: "나의 지도",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="map" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="mypage"
         options={{
           title: "마이",
