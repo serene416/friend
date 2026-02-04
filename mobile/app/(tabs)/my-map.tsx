@@ -10,9 +10,10 @@ import {
     metersToKm,
 } from '@/utils/recommendation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function MyMapScreen() {
@@ -21,6 +22,10 @@ export default function MyMapScreen() {
     const recommendation = useRecommendationStore((state) => state.recommendation);
     const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
     const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+    const bottomSheetRef = useRef<BottomSheet>(null);
+
+    // Snap points: collapsed (half screen) -> full
+    const snapPoints = useMemo(() => ['50%', '90%'], []);
 
     const markers = useMemo(() => {
         return favorites
@@ -96,6 +101,28 @@ export default function MyMapScreen() {
         );
     }
 
+    // Detail helper variables derived similar to ActivityDetailScreen
+    const description = selectedItem
+        ? `${selectedItem.title}은(는) 친구들과의 중간 지점을 기준으로 추천된 장소예요. 카테고리: ${selectedItem.category}.`
+        : '';
+
+    const highlightItems = selectedItem
+        ? [
+            {
+                icon: 'train',
+                text: selectedItem.sourceStation ? `${selectedItem.sourceStation} 인근 추천` : '중앙 위치 기반 추천',
+            },
+            {
+                icon: 'map-marker-radius',
+                text: selectedItem.distanceLabel,
+            },
+            {
+                icon: 'tag',
+                text: selectedItem.sourceKeyword || selectedItem.category,
+            },
+        ]
+        : [];
+
     return (
         <GestureHandlerRootView style={styles.container}>
             <View style={styles.header}>
@@ -112,23 +139,27 @@ export default function MyMapScreen() {
             </View>
 
             {selectedItem && (
-                <Modal
-                    animationType="slide"
-                    transparent
-                    visible={Boolean(selectedItem)}
-                    onRequestClose={() => setSelectedMarkerId(null)}
+                <BottomSheet
+                    ref={bottomSheetRef}
+                    index={0}
+                    snapPoints={snapPoints}
+                    enablePanDownToClose
+                    onClose={() => setSelectedMarkerId(null)}
+                    backgroundStyle={styles.sheetBackground}
+                    handleIndicatorStyle={styles.sheetIndicator}
                 >
-                    <View style={styles.sheetOverlay}>
-                        <Pressable style={styles.sheetBackdrop} onPress={() => setSelectedMarkerId(null)} />
-                        <View style={styles.sheetContainer}>
-                            <View style={styles.sheetIndicator} />
-                            <ScrollView contentContainerStyle={styles.sheetContent} bounces={false}>
-                        {/* Header with image */}
+                    <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
+                        {/* Hero Image */}
                         <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
 
-                        {/* Title and meta */}
                         <View style={styles.sheetInfo}>
-                            <Text style={styles.sheetTitle}>{selectedItem.title}</Text>
+                            {/* Title & Heart */}
+                            <View style={styles.titleContainer}>
+                                <Text style={styles.sheetTitle}>{selectedItem.title}</Text>
+                                {/* Heart icon logic could be added here if needed, keeping simple for now */}
+                            </View>
+
+                            {/* Meta Row */}
                             <View style={styles.sheetMeta}>
                                 <View style={styles.metaItem}>
                                     <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
@@ -140,38 +171,40 @@ export default function MyMapScreen() {
                                 </View>
                             </View>
 
-                            {/* Address */}
-                            <View style={styles.infoRow}>
-                                <MaterialCommunityIcons name="map-marker-outline" size={18} color="#888" />
-                                <Text style={styles.infoText}>{selectedItem.address}</Text>
+                            {/* Activity Intro Section */}
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>활동 소개</Text>
+                                <Text style={styles.description}>{description}</Text>
                             </View>
 
-                            {/* Phone */}
-                            <View style={styles.infoRow}>
-                                <MaterialCommunityIcons name="phone-outline" size={18} color="#888" />
-                                <Text style={styles.infoText}>{selectedItem.phone}</Text>
+                            {/* Highlights Section */}
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>주요 포인트</Text>
+                                {highlightItems.map((item, index) => (
+                                    <View key={index} style={styles.highlightItem}>
+                                        <MaterialCommunityIcons name={item.icon as any} size={20} color="#666" />
+                                        <Text style={styles.highlightText}>{item.text}</Text>
+                                    </View>
+                                ))}
                             </View>
 
-                            {/* Source info */}
-                            {selectedItem.sourceStation && (
+                            {/* Location Info Section */}
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>상세 정보</Text>
+                                {/* Address */}
                                 <View style={styles.infoRow}>
-                                    <MaterialCommunityIcons name="train" size={18} color="#888" />
-                                    <Text style={styles.infoText}>{selectedItem.sourceStation} 역 인근</Text>
+                                    <MaterialCommunityIcons name="map-marker-outline" size={18} color="#888" />
+                                    <Text style={styles.infoText}>{selectedItem.address}</Text>
                                 </View>
-                            )}
-
-                            {/* CTA Button */}
-                            <TouchableOpacity
-                                style={styles.ctaButton}
-                                onPress={() => router.push(`/activity-detail?id=${encodeURIComponent(selectedItem.id)}`)}
-                            >
-                                <Text style={styles.ctaButtonText}>상세 정보 보기</Text>
-                            </TouchableOpacity>
+                                {/* Phone */}
+                                <View style={styles.infoRow}>
+                                    <MaterialCommunityIcons name="phone-outline" size={18} color="#888" />
+                                    <Text style={styles.infoText}>{selectedItem.phone}</Text>
+                                </View>
+                            </View>
                         </View>
-                            </ScrollView>
-                        </View>
-                    </View>
-                </Modal>
+                    </BottomSheetScrollView>
+                </BottomSheet>
             )}
         </GestureHandlerRootView>
     );
@@ -214,15 +247,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Pretendard-Medium',
         color: '#888',
     },
-    sheetOverlay: {
-        flex: 1,
-        justifyContent: 'flex-end',
-    },
-    sheetBackdrop: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    },
-    sheetContainer: {
+    sheetBackground: {
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
@@ -231,16 +256,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 10,
         elevation: 10,
-        maxHeight: '85%',
     },
     sheetIndicator: {
         backgroundColor: '#ccc',
         width: 40,
-        height: 4,
-        borderRadius: 2,
-        alignSelf: 'center',
-        marginTop: 10,
-        marginBottom: 6,
     },
     sheetContent: {
         paddingBottom: 40,
@@ -253,11 +272,17 @@ const styles = StyleSheet.create({
     sheetInfo: {
         padding: 20,
     },
+    titleContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
     sheetTitle: {
         fontSize: 22,
         fontFamily: 'Pretendard-Bold',
         color: '#333',
-        marginBottom: 12,
+        flex: 1,
     },
     sheetMeta: {
         flexDirection: 'row',
@@ -277,6 +302,34 @@ const styles = StyleSheet.create({
         color: '#666',
         fontFamily: 'Pretendard-Medium',
     },
+    section: {
+        marginBottom: 24,
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontFamily: 'Pretendard-Bold',
+        marginBottom: 12,
+        color: '#333',
+    },
+    description: {
+        fontSize: 14,
+        color: '#666',
+        lineHeight: 22,
+        fontFamily: 'Pretendard-Medium',
+    },
+    highlightItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 12,
+        paddingVertical: 8,
+    },
+    highlightText: {
+        fontSize: 14,
+        color: '#555',
+        fontFamily: 'Pretendard-Medium',
+        flex: 1,
+    },
     infoRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -288,17 +341,5 @@ const styles = StyleSheet.create({
         color: '#555',
         fontFamily: 'Pretendard-Medium',
         flex: 1,
-    },
-    ctaButton: {
-        backgroundColor: '#333',
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 20,
-    },
-    ctaButtonText: {
-        fontSize: 16,
-        fontFamily: 'Pretendard-Bold',
-        color: '#fff',
     },
 });
