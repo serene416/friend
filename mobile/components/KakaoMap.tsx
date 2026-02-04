@@ -52,19 +52,29 @@ export default function KakaoMap({ latitude, longitude, markers = [] }: KakaoMap
             
             var markersData = ${markersData};
             
+            // Custom marker image with smaller size
+            var imageSrc = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png"; 
+            // Or use the standard blue marker: "https://t1.daumcdn.net/mapjsapi/images/marker.png"
+            // Let's use the standard one but smaller.
+            var imageSrc = "https://t1.daumcdn.net/mapjsapi/images/marker.png";
+            var imageSize = new kakao.maps.Size(22, 30); // Reduced size (default is approx 29x42)
+            var markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize);
+
             if (markersData && markersData.length > 0) {
               var bounds = new kakao.maps.LatLngBounds();
               
               markersData.forEach(function(m) {
                 var position = new kakao.maps.LatLng(m.lat, m.lng);
-                var marker = new kakao.maps.Marker({ position: position });
+                var marker = new kakao.maps.Marker({ 
+                    position: position,
+                    image: markerImage // Apply custom image size
+                });
                 marker.setMap(map);
                 
                 if (m.title) {
                   var infowindow = new kakao.maps.InfoWindow({
                     content: '<div style="padding:5px;font-size:12px;">' + m.title + '</div>'
                   });
-                  // infowindow.open(map, marker); // Optional: Open by default or on click
                    kakao.maps.event.addListener(marker, 'click', function() {
                       infowindow.open(map, marker);
                    });
@@ -80,11 +90,11 @@ export default function KakaoMap({ latitude, longitude, markers = [] }: KakaoMap
                 map.setCenter(new kakao.maps.LatLng(markersData[0].lat, markersData[0].lng));
               }
             } else {
-              // Default single marker behavior if no markers prop provided (or empty)
-              // But if latitude/longitude are provided, we usually want a marker there?
-              // Existing behavior was: center + marker at center.
-              // Let's keep a marker at center IF markers array is empty.
-              var marker = new kakao.maps.Marker({ position: center });
+              // Default single marker with resized image
+              var marker = new kakao.maps.Marker({ 
+                  position: center,
+                  image: markerImage 
+              });
               marker.setMap(map);
             }
           });
