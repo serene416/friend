@@ -29,6 +29,8 @@ export interface MidpointHotplace {
   distance?: number | null;
   source_station: string;
   source_keyword: string;
+  representative_image_url?: string | null;
+  photo_urls?: string[];
 }
 
 export interface MidpointHotplaceResponse {

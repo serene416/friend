@@ -132,12 +132,29 @@ The backend now exposes internal ingestion endpoints:
 - `GET /api/v1/internal/ingestion/jobs/{job_id}`  
   Returns current ingestion job status and item counters.
 
-Current crawler behavior is intentionally placeholder-only:
-- `worker/crawlers/naver_place.py`
-- `worker/crawlers/instagram.py`
+Crawler adapters:
+- `worker/crawlers/naver_place.py`: Playwright-based Naver Place review/photo crawler with Kakao->Naver mapping.
+- `worker/crawlers/instagram.py`: deterministic placeholder trend adapter.
 
-These adapters return deterministic fake data so the pipeline is runnable end-to-end.  
-To implement real crawling logic, fill in the TODOs in those files (auth/session handling, selectors/parsing, and rate-limit/backoff policy).
+### Naver crawler environment variables
+
+You can tune crawler safety/behavior with:
+- `NAVER_CRAWLER_HEADLESS` (default: `true`)
+- `NAVER_CRAWLER_TIMEOUT_MS` (default: `12000`)
+- `NAVER_REVIEW_MAX_CLICKS` (default: `20`)
+- `NAVER_PHOTO_MAX_SCROLLS` (default: `30`)
+- `NAVER_NO_GROWTH_LIMIT` (default: `3`)
+- `NAVER_REQUEST_DELAY_MS` (default: `350`)
+- `NAVER_CRAWLER_USER_AGENT` (optional, default: unset)
+
+### Stage 2 crawler safety notes
+
+- Naver crawling remains background-only via Celery (`tasks.ingest_job`) and does not block midpoint API responses.
+- Kakao->Naver mapping is attempted first for each item using place name and optional coordinates.
+- If mapping fails or no crawlable Naver target is found, the item is marked `SKIPPED` (not `FAILED`) and ingestion continues.
+- Review/photo loops are bounded (`MAX_CLICKS`, `MAX_SCROLLS`, no-growth limits) to prevent infinite loops.
+- Selectors are fallback-based and actions use bounded retries + jittered delays for transient page failures.
+- The crawler is best-effort; DOM changes, bot defenses, or geo/access restrictions can reduce collected counts.
 
 ## Tech Stack
 

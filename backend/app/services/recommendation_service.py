@@ -13,7 +13,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.models.sql import Place
+from app.models.sql import Place, PlaceIngestionFeature
 from app.schemas.recommendation import (
     Midpoint,
     MidpointHotplace,
@@ -189,6 +189,97 @@ class RecommendationService:
             return json.dumps(data, ensure_ascii=False)
         except TypeError:
             return str(data)
+
+    @staticmethod
+    def _normalize_photo_urls(raw_urls: object, max_count: int = 5) -> list[str]:
+        if not isinstance(raw_urls, list):
+            return []
+
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for value in raw_urls:
+            if not isinstance(value, str):
+                continue
+            url = value.strip()
+            if not url or not url.startswith("http") or url in seen:
+                continue
+            deduped.append(url)
+            seen.add(url)
+            if len(deduped) >= max_count:
+                break
+        return deduped
+
+    def _extract_photo_urls_from_feature_payload(self, feature_payload: object) -> list[str]:
+        if not isinstance(feature_payload, dict):
+            return []
+
+        raw_samples = feature_payload.get("latest_photo_sample")
+        if not isinstance(raw_samples, list):
+            return []
+
+        photo_urls = []
+        for sample in raw_samples:
+            if not isinstance(sample, dict):
+                continue
+            photo_urls.append(sample.get("image_url"))
+        return self._normalize_photo_urls(photo_urls)
+
+    async def _fetch_hotplace_photo_urls(
+        self,
+        session: AsyncSession | None,
+        kakao_place_ids: list[str],
+    ) -> dict[str, list[str]]:
+        if session is None or not kakao_place_ids:
+            return {}
+
+        try:
+            rows = (
+                await session.execute(
+                    select(PlaceIngestionFeature).where(
+                        PlaceIngestionFeature.kakao_place_id.in_(kakao_place_ids)
+                    )
+                )
+            ).scalars().all()
+        except Exception:
+            logger.warning(
+                "Failed to load place_ingestion_feature photos; continuing without images",
+                exc_info=True,
+            )
+            return {}
+
+        photo_map: dict[str, list[str]] = {}
+        for row in rows:
+            photo_urls = self._extract_photo_urls_from_feature_payload(row.feature_payload)
+            if photo_urls:
+                photo_map[row.kakao_place_id] = photo_urls
+        return photo_map
+
+    async def _attach_hotplace_photos(
+        self,
+        hotplaces: list[MidpointHotplace],
+        session: AsyncSession | None,
+    ) -> list[MidpointHotplace]:
+        if not hotplaces:
+            return hotplaces
+
+        kakao_place_ids = [hotplace.kakao_place_id for hotplace in hotplaces]
+        photo_map = await self._fetch_hotplace_photo_urls(session, kakao_place_ids)
+        if not photo_map:
+            return hotplaces
+
+        enriched: list[MidpointHotplace] = []
+        for hotplace in hotplaces:
+            photo_urls = photo_map.get(hotplace.kakao_place_id, [])
+            representative = photo_urls[0] if photo_urls else hotplace.representative_image_url
+            enriched.append(
+                hotplace.model_copy(
+                    update={
+                        "photo_urls": photo_urls,
+                        "representative_image_url": representative,
+                    }
+                )
+            )
+        return enriched
 
     async def get_recommendations(
         self, session: AsyncSession, request: RecommendationRequest
@@ -492,7 +583,9 @@ class RecommendationService:
         return station.station_name, keyword, documents
 
     async def get_midpoint_hotplaces(
-        self, request: MidpointHotplaceRequest
+        self,
+        request: MidpointHotplaceRequest,
+        session: AsyncSession | None = None,
     ) -> MidpointHotplaceResponse:
         applied_keywords = PREDEFINED_PLAY_KEYWORDS
         applied_station_limit = self.fixed_station_limit
@@ -538,7 +631,8 @@ class RecommendationService:
                     "kakao_api_call_count": 0,
                 }
             )
-            return cached_response.model_copy(update={"meta": cached_meta})
+            cached_hotplaces = await self._attach_hotplace_photos(cached_response.hotplaces, session)
+            return cached_response.model_copy(update={"meta": cached_meta, "hotplaces": cached_hotplaces})
 
         logger.info(
             "Midpoint hotplace request: participants=%s midpoint=(%.6f, %.6f) station_radius=%s "
@@ -675,6 +769,7 @@ class RecommendationService:
                 deduped_hotplaces[hotplace.kakao_place_id] = hotplace
 
         hotplaces = list(deduped_hotplaces.values())
+        hotplaces = await self._attach_hotplace_photos(hotplaces, session)
         hotplaces.sort(
             key=lambda item: (item.distance is None, item.distance if item.distance is not None else 0)
         )
@@ -690,7 +785,8 @@ class RecommendationService:
                         hotplace.source_keyword,
                         hotplace.category_name,
                     ),
-                    "representative_image_url": None,
+                    "representative_image_url": hotplace.representative_image_url,
+                    "photo_count": len(hotplace.photo_urls),
                 }
                 for hotplace in hotplaces
             ]
