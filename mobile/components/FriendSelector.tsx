@@ -1,6 +1,6 @@
+import { MidpointHotplaceResponse } from '@/types/recommendation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MidpointHotplaceResponse } from '@/types/recommendation';
 import { getBackendUrl } from '../constants/api';
 import { useAuthStore } from '../store/useAuthStore';
 import { useFriendStore } from '../store/useFriendStore';
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
         borderColor: '#eee',
         backgroundColor: '#fff',
         // Shadow for card effect
-        shadowColor: '#000',
+        shadowColor: '#e8b6b6',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
