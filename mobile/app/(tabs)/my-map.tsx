@@ -2,12 +2,19 @@
 import KakaoMap from '@/components/KakaoMap';
 import { useFavoriteStore } from '@/store/useFavoriteStore';
 import { useRecommendationStore } from '@/store/useRecommendationStore';
-import { formatDistanceKm, getDistanceKmFromCurrentLocation, getHotplaceImageUrl, mapSourceKeywordToPlayCategory, metersToKm } from '@/utils/recommendation';
-import { Ionicons } from '@expo/vector-icons';
+import {
+    formatDistanceKm,
+    getDistanceKmFromCurrentLocation,
+    getHotplaceImageUrl,
+    mapSourceKeywordToPlayCategory,
+    metersToKm,
+} from '@/utils/recommendation';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function MyMapScreen() {
     const router = useRouter();
@@ -15,6 +22,10 @@ export default function MyMapScreen() {
     const recommendation = useRecommendationStore((state) => state.recommendation);
     const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
     const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+    const bottomSheetRef = useRef<BottomSheet>(null);
+
+    // Snap points: collapsed (120px) -> half -> full
+    const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
 
     const markers = useMemo(() => {
         return favorites
@@ -29,7 +40,7 @@ export default function MyMapScreen() {
 
                 return {
                     id: favoriteId,
-                    lat: Number(hotplace.y), // ensure number
+                    lat: Number(hotplace.y),
                     lng: Number(hotplace.x),
                     title: hotplace.place_name,
                 };
@@ -37,10 +48,9 @@ export default function MyMapScreen() {
             .filter((item): item is { id: string; lat: number; lng: number; title: string } => item !== null);
     }, [favorites, getHotplaceById, recommendation]);
 
-    // Default center (Seoul City Hall) if no markers or current location
     const defaultCenter = {
         lat: recommendation?.currentLocation?.lat ?? 37.5665,
-        lng: recommendation?.currentLocation?.lng ?? 126.9780
+        lng: recommendation?.currentLocation?.lng ?? 126.9780,
     };
 
     const selectedItem = useMemo(() => {
@@ -52,32 +62,49 @@ export default function MyMapScreen() {
 
         if (!hotplace) return null;
 
+        const distanceKm =
+            getDistanceKmFromCurrentLocation(hotplace, recommendation?.currentLocation) ??
+            metersToKm(hotplace.distance);
+
         return {
             id: hotplace.kakao_place_id,
             title: hotplace.place_name,
             image: getHotplaceImageUrl(hotplace.kakao_place_id),
-            distanceLabel: formatDistanceKm(
-                getDistanceKmFromCurrentLocation(hotplace, recommendation?.currentLocation) ??
-                metersToKm(hotplace.distance)
-            ),
+            distanceLabel: formatDistanceKm(distanceKm),
             category: mapSourceKeywordToPlayCategory(hotplace.source_keyword, hotplace.category_name),
+            address: hotplace.address_name || hotplace.road_address_name || '주소 정보 없음',
+            phone: hotplace.phone || '전화번호 정보 없음',
+            sourceStation: hotplace.source_station,
+            sourceKeyword: hotplace.source_keyword,
         };
     }, [selectedMarkerId, recommendation, getHotplaceById]);
 
+    const handleMarkerClick = useCallback((id: string) => {
+        setSelectedMarkerId(id);
+        bottomSheetRef.current?.snapToIndex(0); // Open sheet
+    }, []);
+
+    const handleMapClick = useCallback(() => {
+        setSelectedMarkerId(null);
+        bottomSheetRef.current?.close();
+    }, []);
 
     if (!favorites || favorites.length === 0) {
         return (
-            <SafeAreaView style={styles.container}>
+            <GestureHandlerRootView style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>나의 지도</Text>
+                </View>
                 <View style={styles.emptyContainer}>
                     <Text style={styles.emptyText}>아직 관심 목록이 비어있어요.</Text>
                     <Text style={styles.emptySubText}>마음에 들었던 장소를 추가해보세요!</Text>
                 </View>
-            </SafeAreaView>
-        )
+            </GestureHandlerRootView>
+        );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <GestureHandlerRootView style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>나의 지도</Text>
             </View>
@@ -86,38 +113,71 @@ export default function MyMapScreen() {
                     latitude={markers.length > 0 ? markers[0].lat : defaultCenter.lat}
                     longitude={markers.length > 0 ? markers[0].lng : defaultCenter.lng}
                     markers={markers}
-                    onMarkerClick={setSelectedMarkerId}
-                    onMapClick={() => setSelectedMarkerId(null)}
+                    onMarkerClick={handleMarkerClick}
+                    onMapClick={handleMapClick}
                 />
+            </View>
 
-                {selectedItem && (
-                    <View style={styles.cardContainer}>
-                        <TouchableOpacity
-                            style={styles.card}
-                            activeOpacity={0.9}
-                            onPress={() => {
-                                router.push(`/activity-detail?id=${encodeURIComponent(selectedItem.id)}`);
-                            }}
-                        >
-                            <Image source={{ uri: selectedItem.image }} style={styles.cardImage} />
-                            <View style={styles.cardContent}>
-                                <View style={styles.cardHeader}>
-                                    <Text style={styles.cardTitle} numberOfLines={1}>{selectedItem.title}</Text>
-                                    <TouchableOpacity onPress={() => setSelectedMarkerId(null)}>
-                                        <Ionicons name="close" size={20} color="#999" />
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={styles.cardMeta}>
+            {selectedItem && (
+                <BottomSheet
+                    ref={bottomSheetRef}
+                    index={0}
+                    snapPoints={snapPoints}
+                    enablePanDownToClose
+                    onClose={() => setSelectedMarkerId(null)}
+                    backgroundStyle={styles.sheetBackground}
+                    handleIndicatorStyle={styles.sheetIndicator}
+                >
+                    <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
+                        {/* Header with image */}
+                        <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
+
+                        {/* Title and meta */}
+                        <View style={styles.sheetInfo}>
+                            <Text style={styles.sheetTitle}>{selectedItem.title}</Text>
+                            <View style={styles.sheetMeta}>
+                                <View style={styles.metaItem}>
+                                    <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
                                     <Text style={styles.metaText}>{selectedItem.distanceLabel}</Text>
-                                    <Text style={styles.metaText}>•</Text>
+                                </View>
+                                <View style={styles.metaItem}>
+                                    <MaterialCommunityIcons name="tag" size={16} color="#666" />
                                     <Text style={styles.metaText}>{selectedItem.category}</Text>
                                 </View>
                             </View>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </View>
-        </SafeAreaView>
+
+                            {/* Address */}
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="map-marker-outline" size={18} color="#888" />
+                                <Text style={styles.infoText}>{selectedItem.address}</Text>
+                            </View>
+
+                            {/* Phone */}
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="phone-outline" size={18} color="#888" />
+                                <Text style={styles.infoText}>{selectedItem.phone}</Text>
+                            </View>
+
+                            {/* Source info */}
+                            {selectedItem.sourceStation && (
+                                <View style={styles.infoRow}>
+                                    <MaterialCommunityIcons name="train" size={18} color="#888" />
+                                    <Text style={styles.infoText}>{selectedItem.sourceStation} 역 인근</Text>
+                                </View>
+                            )}
+
+                            {/* CTA Button */}
+                            <TouchableOpacity
+                                style={styles.ctaButton}
+                                onPress={() => router.push(`/activity-detail?id=${encodeURIComponent(selectedItem.id)}`)}
+                            >
+                                <Text style={styles.ctaButtonText}>상세 정보 보기</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </BottomSheetScrollView>
+                </BottomSheet>
+            )}
+        </GestureHandlerRootView>
     );
 }
 
@@ -130,8 +190,9 @@ const styles = StyleSheet.create({
         paddingVertical: 15,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
-        alignItems: 'center', // Center content
+        alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: '#fff',
     },
     headerTitle: {
         fontSize: 20,
@@ -140,7 +201,6 @@ const styles = StyleSheet.create({
     },
     mapContainer: {
         flex: 1,
-        position: 'relative',
     },
     emptyContainer: {
         flex: 1,
@@ -158,55 +218,77 @@ const styles = StyleSheet.create({
         fontFamily: 'Pretendard-Medium',
         color: '#888',
     },
-    cardContainer: {
-        position: 'absolute',
-        bottom: 20,
-        left: 20,
-        right: 20,
-        zIndex: 10,
-    },
-    card: {
+    sheetBackground: {
         backgroundColor: '#fff',
-        borderRadius: 16,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 5,
-        flexDirection: 'row',
-        overflow: 'hidden',
-        height: 100,
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 10,
     },
-    cardImage: {
-        width: 100,
-        height: '100%',
+    sheetIndicator: {
+        backgroundColor: '#ccc',
+        width: 40,
+    },
+    sheetContent: {
+        paddingBottom: 40,
+    },
+    sheetImage: {
+        width: '100%',
+        height: 200,
         backgroundColor: '#eee',
     },
-    cardContent: {
-        flex: 1,
-        padding: 15,
-        justifyContent: 'center',
+    sheetInfo: {
+        padding: 20,
     },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 4,
-    },
-    cardTitle: {
-        fontSize: 16,
+    sheetTitle: {
+        fontSize: 22,
         fontFamily: 'Pretendard-Bold',
         color: '#333',
-        flex: 1,
-        marginRight: 8,
+        marginBottom: 12,
     },
-    cardMeta: {
+    sheetMeta: {
         flexDirection: 'row',
+        gap: 16,
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    metaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
     },
     metaText: {
-        fontSize: 13,
+        fontSize: 14,
         color: '#666',
-        marginRight: 5,
         fontFamily: 'Pretendard-Medium',
+    },
+    infoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 12,
+    },
+    infoText: {
+        fontSize: 14,
+        color: '#555',
+        fontFamily: 'Pretendard-Medium',
+        flex: 1,
+    },
+    ctaButton: {
+        backgroundColor: '#333',
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    ctaButtonText: {
+        fontSize: 16,
+        fontFamily: 'Pretendard-Bold',
+        color: '#fff',
     },
 });
