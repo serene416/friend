@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 20,
         // Shadow/Card effect
-        shadowColor: "#000",
+        shadowColor: "#e8b6b6",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 10,
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         paddingVertical: 8,
         // Shadow
-        shadowColor: "#000",
+        shadowColor: "#e8b6b6",
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 5,
