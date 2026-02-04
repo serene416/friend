@@ -1,100 +1,144 @@
-import KakaoMap from "@/components/KakaoMap";
-import { MOCK_ACTIVITIES } from "@/constants/data";
-import { useFavoriteStore } from "@/store/useFavoriteStore";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import * as Location from "expo-location";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import KakaoMap from '@/components/KakaoMap';
+import { MOCK_ACTIVITIES } from '@/constants/data';
+import { useFavoriteStore } from '@/store/useFavoriteStore';
+import { useRecommendationStore } from '@/store/useRecommendationStore';
 import {
-  ActivityIndicator,
+  formatDistanceKm,
+  getDistanceKmFromCurrentLocation,
+  getHotplaceImageUrl,
+  mapSourceKeywordToPlayCategory,
+  metersToKm,
+} from '@/utils/recommendation';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+const parseIdParam = (value: string | string[] | undefined) => {
+  const raw = typeof value === 'string' ? value : Array.isArray(value) ? value[0] : '';
+  if (!raw) {
+    return '';
+  }
+
+  try {
+    return decodeURIComponent(raw).trim();
+  } catch {
+    return raw.trim();
+  }
+};
 
 export default function ActivityDetailScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const activityId = useMemo(() => parseIdParam(id), [id]);
 
-  const { id } = useLocalSearchParams();
-  const activityId = typeof id === 'string' ? id : id?.[0] ?? '';
   const { toggleFavorite, isFavorite } = useFavoriteStore();
+  const recommendation = useRecommendationStore((state) => state.recommendation);
+  const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
 
-  const [location, setLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [isMapVisible, setIsMapVisible] = useState(false);
-  const isFetchingLocationRef = useRef(false);
+  const [isOpeningPlaceUrl, setIsOpeningPlaceUrl] = useState(false);
 
-  const activity = MOCK_ACTIVITIES.find((a) => a.id === id);
+  const hotplaceFromLatest = useMemo(
+    () => recommendation?.hotplaces.find((place) => place.kakao_place_id === activityId),
+    [activityId, recommendation?.hotplaces]
+  );
+  const hotplace = hotplaceFromLatest ?? (activityId ? getHotplaceById(activityId) : undefined);
+  const activity = useMemo(
+    () => MOCK_ACTIVITIES.find((item) => item.id === activityId),
+    [activityId]
+  );
 
-  const fetchCurrentLocation = useCallback(async () => {
-    if (isFetchingLocationRef.current) {
+  const currentLocation = recommendation?.currentLocation ?? null;
+  const category = hotplace
+    ? mapSourceKeywordToPlayCategory(hotplace.source_keyword, hotplace.category_name)
+    : activity?.tags?.[0] ?? '기타';
+
+  const distanceKm = hotplace
+    ? getDistanceKmFromCurrentLocation(hotplace, currentLocation) ?? metersToKm(hotplace.distance)
+    : activity?.distance ?? null;
+
+  const title = hotplace?.place_name ?? activity?.title ?? '활동 정보 없음';
+  const heroImage = hotplace
+    ? getHotplaceImageUrl(hotplace.kakao_place_id)
+    : activity?.image ?? getHotplaceImageUrl(`fallback-${activityId || 'unknown'}`);
+
+  const highlightItems = hotplace
+    ? [
+        {
+          icon: 'train',
+          text: hotplace.source_station ? `${hotplace.source_station} 인근 추천` : '중앙 위치 기반 추천',
+        },
+        {
+          icon: 'map-marker-radius',
+          text: formatDistanceKm(distanceKm),
+        },
+        {
+          icon: 'tag',
+          text: hotplace.source_keyword || category,
+        },
+      ]
+    : activity?.highlights ?? [];
+
+  const tags = hotplace
+    ? Array.from(new Set([category, hotplace.source_keyword, hotplace.category_name].filter(Boolean)))
+    : activity?.tags ?? [];
+
+  const description = hotplace
+    ? `${title}은(는) 친구들과의 중간 지점을 기준으로 추천된 장소예요. 카테고리: ${category}.`
+    : activity?.description ?? '활동 정보를 준비 중입니다.';
+
+  const handleOpenPlaceUrl = useCallback(async () => {
+    if (!hotplace?.place_url) {
       return;
     }
 
-    isFetchingLocationRef.current = true;
-    setIsLoadingLocation(true);
-    setLocationError(null);
+    setIsOpeningPlaceUrl(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setLocationError("Location permission denied.");
+      const canOpen = await Linking.canOpenURL(hotplace.place_url);
+      if (!canOpen) {
+        Alert.alert('안내', '장소 링크를 열 수 없습니다.');
         return;
       }
-
-      const servicesEnabled = await Location.hasServicesEnabledAsync();
-      if (!servicesEnabled) {
-        setLocationError("Location services are disabled.");
-        return;
-      }
-
-      const timeoutMs = 8000;
-      const currentPosition = await Promise.race([
-        Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          mayShowUserSettingsDialog: true,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), timeoutMs)
-        ),
-      ]);
-
-      setLocation({
-        latitude: currentPosition.coords.latitude,
-        longitude: currentPosition.coords.longitude,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message === "timeout") {
-        setLocationError("Location request timed out.");
-      } else {
-        setLocationError("Unable to fetch location.");
-      }
+      await Linking.openURL(hotplace.place_url);
+    } catch {
+      Alert.alert('오류', '링크를 여는 중 문제가 발생했어요.');
     } finally {
-      isFetchingLocationRef.current = false;
-      setIsLoadingLocation(false);
+      setIsOpeningPlaceUrl(false);
     }
-  }, []);
+  }, [hotplace?.place_url]);
 
-  const handleLocationRoutePress = useCallback(() => {
-    setIsMapVisible(true);
-    void fetchCurrentLocation();
-  }, [fetchCurrentLocation]);
-
-  useEffect(() => {
-    void fetchCurrentLocation();
-  }, [fetchCurrentLocation]);
-
-  if (!activity) {
+  if (!activityId) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>활동을 찾을 수 없습니다</Text>
+        <View style={styles.notFoundContainer}>
+          <Text style={styles.notFoundText}>잘못된 접근이에요.</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>뒤로가기</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!hotplace && !activity) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.notFoundContainer}>
+          <Text style={styles.notFoundText}>활동을 찾을 수 없습니다.</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>뒤로가기</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -102,122 +146,95 @@ export default function ActivityDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Activity Image & Favorite Button */}
         <View style={styles.imageContainer}>
-          <Image source={{ uri: activity.image }} style={styles.heroImage} />
+          <Image source={{ uri: heroImage }} style={styles.heroImage} />
           <TouchableOpacity
             style={styles.favoriteButton}
             onPress={() => toggleFavorite(activityId)}
           >
             <MaterialCommunityIcons
-              name={isFavorite(activityId) ? "heart" : "heart-outline"}
+              name={isFavorite(activityId) ? 'heart' : 'heart-outline'}
               size={28}
-              color={isFavorite(activityId) ? "#FF4B4B" : "#fff"}
+              color={isFavorite(activityId) ? '#FF4B4B' : '#fff'}
             />
           </TouchableOpacity>
         </View>
 
-        {/* Activity Info */}
         <View style={styles.infoContainer}>
-          <Text style={styles.title}>{activity.title}</Text>
+          <Text style={styles.title}>{title}</Text>
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <MaterialCommunityIcons
-                name="map-marker"
-                size={20}
-                color="#666"
-              />
-              <Text style={styles.metaText}>{activity.distance} km</Text>
+              <MaterialCommunityIcons name='map-marker' size={20} color='#666' />
+              <Text style={styles.metaText}>{formatDistanceKm(distanceKm)}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <MaterialCommunityIcons name='tag' size={20} color='#666' />
+              <Text style={styles.metaText}>{category}</Text>
             </View>
             <View style={styles.metaItem}>
               <MaterialCommunityIcons
-                name="account-multiple"
+                name={hotplace ? 'map-search' : 'clock-outline'}
                 size={20}
-                color="#666"
+                color='#666'
               />
-              <Text style={styles.metaText}>{activity.headcount}</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <MaterialCommunityIcons
-                name="clock-outline"
-                size={20}
-                color="#666"
-              />
-              <Text style={styles.metaText}>{activity.time}</Text>
+              <Text style={styles.metaText}>
+                {hotplace ? hotplace.source_station : activity?.time ?? '정보 없음'}
+              </Text>
             </View>
           </View>
 
-          {/* Tags */}
           <View style={styles.tagsContainer}>
-            {activity.tags.map((tag, index) => (
-              <View key={index} style={styles.tag}>
+            {tags.map((tag, index) => (
+              <View key={`tag-${index}`} style={styles.tag}>
                 <Text style={styles.tagText}>{tag}</Text>
               </View>
             ))}
           </View>
 
-          {/* Description */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>활동 소개</Text>
-            <Text style={styles.description}>
-              {activity.description}
-            </Text>
+            <Text style={styles.description}>{description}</Text>
           </View>
 
-          {/* Highlights */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>주요 포인트</Text>
-            {activity.highlights.map((item, index) => (
+            {highlightItems.map((item, index) => (
               <View key={index} style={styles.highlightItem}>
-                <MaterialCommunityIcons name={item.icon as any} size={20} color="#666" />
+                <MaterialCommunityIcons name={item.icon as any} size={20} color='#666' />
                 <Text style={styles.highlightText}>{item.text}</Text>
               </View>
             ))}
           </View>
 
-          {/* Map Placeholder */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>위치 및 경로</Text>
-              <TouchableOpacity
-                style={styles.locationButton}
-                onPress={handleLocationRoutePress}
-              >
-                <Text style={styles.locationButtonText}>
-                  {isMapVisible ? "새로고침" : "내 위치 보기"}
-                </Text>
-              </TouchableOpacity>
+              {hotplace?.place_url && (
+                <TouchableOpacity
+                  style={styles.locationButton}
+                  onPress={handleOpenPlaceUrl}
+                  disabled={isOpeningPlaceUrl}
+                >
+                  <Text style={styles.locationButtonText}>
+                    {isOpeningPlaceUrl ? '열는 중...' : '카카오 장소 링크'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
             <View style={styles.mapPlaceholder}>
-              {isLoadingLocation ? (
-                <View style={styles.mapPlaceholderContent}>
-                  <ActivityIndicator size="large" color="#666" />
-                </View>
-              ) : locationError ? (
-                <View style={styles.mapPlaceholderContent}>
-                  <Text style={styles.mapPlaceholderText}>{locationError}</Text>
-                </View>
-              ) : location && isMapVisible ? (
-                <KakaoMap
-                  latitude={location.latitude}
-                  longitude={location.longitude}
-                />
+              {hotplace ? (
+                <KakaoMap latitude={hotplace.y} longitude={hotplace.x} />
               ) : (
                 <View style={styles.mapPlaceholderContent}>
-                  <MaterialCommunityIcons name="map" size={60} color="#ccc" />
-                  <Text style={styles.mapPlaceholderText}>
-                    현재 위치를 불러오려면 누르세요
-                  </Text>
-                  <Text style={styles.mapPlaceholderSubtext}>
-                    여기에 지도가 표시됩니다
-                  </Text>
+                  <MaterialCommunityIcons name='map' size={60} color='#ccc' />
+                  <Text style={styles.mapPlaceholderText}>추천 장소 지도는 추천 후 확인할 수 있어요</Text>
+                  <Text style={styles.mapPlaceholderSubtext}>친구 선택 후 추천을 받아보세요</Text>
                 </View>
               )}
             </View>
           </View>
 
-          {/* Call to Action */}
           <TouchableOpacity style={styles.ctaButton}>
             <Text style={styles.ctaButtonText}>친구 초대하고 함께 가기</Text>
           </TouchableOpacity>
@@ -230,7 +247,29 @@ export default function ActivityDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
+  },
+  notFoundContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  notFoundText: {
+    fontSize: 16,
+    color: '#555',
+    marginBottom: 12,
+    fontFamily: 'Pretendard-Bold',
+  },
+  backButton: {
+    backgroundColor: '#333',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontFamily: 'Pretendard-Medium',
   },
   imageContainer: {
     position: 'relative',
@@ -238,9 +277,9 @@ const styles = StyleSheet.create({
     height: 300,
   },
   heroImage: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#eee",
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#eee',
   },
   favoriteButton: {
     position: 'absolute',
@@ -257,129 +296,134 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: "Pretendard-Bold",
+    fontFamily: 'Pretendard-Bold',
     marginBottom: 16,
-    color: "#333",
+    color: '#333',
   },
   metaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: '#f0f0f0',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
   metaText: {
     fontSize: 14,
-    color: "#666",
-    fontFamily: "Pretendard-Medium",
+    color: '#666',
+    fontFamily: 'Pretendard-Medium',
   },
   tagsContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
     marginBottom: 24,
-    flexWrap: "wrap",
+    flexWrap: 'wrap',
   },
   tag: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: '#f0f0f0',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
   },
   tagText: {
     fontSize: 12,
-    color: "#555",
-    fontFamily: "Pretendard-Bold",
+    color: '#555',
+    fontFamily: 'Pretendard-Bold',
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontFamily: "Pretendard-Bold",
+    fontFamily: 'Pretendard-Bold',
     marginBottom: 12,
-    color: "#333",
+    color: '#333',
   },
   sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   locationButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#333",
+    backgroundColor: '#333',
   },
   locationButtonText: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   description: {
     fontSize: 14,
-    color: "#666",
+    color: '#666',
     lineHeight: 22,
-    fontFamily: "Pretendard-Medium",
+    fontFamily: 'Pretendard-Medium',
   },
   highlightItem: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
     marginBottom: 12,
     paddingVertical: 8,
   },
   highlightText: {
     fontSize: 14,
-    color: "#555",
-    fontFamily: "Pretendard-Medium",
+    color: '#555',
+    fontFamily: 'Pretendard-Medium',
+    flex: 1,
   },
   mapPlaceholder: {
-    width: "100%",
+    width: '100%',
     height: 300,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: '#f5f5f5',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderStyle: "dashed",
-    overflow: "hidden",
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+    overflow: 'hidden',
   },
   mapPlaceholderContent: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mapPlaceholderText: {
     fontSize: 16,
-    color: "#999",
+    color: '#999',
     marginTop: 16,
-    fontFamily: "Pretendard-Bold",
+    fontFamily: 'Pretendard-Bold',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   mapPlaceholderSubtext: {
     fontSize: 12,
-    color: "#bbb",
+    color: '#bbb',
     marginTop: 8,
-    textAlign: "center",
+    textAlign: 'center',
     paddingHorizontal: 20,
-    fontFamily: "Pretendard-Medium",
+    fontFamily: 'Pretendard-Medium',
   },
   ctaButton: {
-    backgroundColor: "#333",
+    backgroundColor: '#333',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 12,
-    alignItems: "center",
+    alignItems: 'center',
     marginVertical: 30,
   },
   ctaButtonText: {
     fontSize: 16,
-    fontFamily: "Pretendard-Bold",
-    color: "#fff",
+    fontFamily: 'Pretendard-Bold',
+    color: '#fff',
   },
 });

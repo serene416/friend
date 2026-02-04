@@ -1,21 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { MidpointHotplaceResponse } from '@/types/recommendation';
 import { getBackendUrl } from '../constants/api';
 import { useAuthStore } from '../store/useAuthStore';
 import { useFriendStore } from '../store/useFriendStore';
+import { useRecommendationStore } from '../store/useRecommendationStore';
 
 const BACKEND_URL = getBackendUrl();
-
-interface MidpointHotplaceResponse {
-    midpoint: {
-        lat: number;
-        lng: number;
-    };
-    chosen_stations: {
-        station_name: string;
-        original_name: string;
-    }[];
-}
 
 interface FriendSelectorProps {
     currentLocation?: { lat: number; lng: number };
@@ -23,6 +14,7 @@ interface FriendSelectorProps {
 
 export default function FriendSelector({ currentLocation }: FriendSelectorProps) {
     const { friends, selectedFriends, toggleFriendSelection, loadFriends } = useFriendStore();
+    const setRecommendation = useRecommendationStore((state) => state.setRecommendation);
     const user = useAuthStore((state) => state.user);
     const [modalVisible, setModalVisible] = useState(false);
     const [midpointText, setMidpointText] = useState('친구를 2명 이상 선택하면 중앙 위치를 계산해요.');
@@ -125,9 +117,26 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
             }
 
             const data: MidpointHotplaceResponse = await response.json();
+            if (
+                !data?.midpoint ||
+                typeof data.midpoint.lat !== 'number' ||
+                typeof data.midpoint.lng !== 'number' ||
+                !Array.isArray(data.hotplaces)
+            ) {
+                throw new Error('추천 응답 형식이 올바르지 않아요.');
+            }
+
+            setRecommendation({
+                midpoint: data.midpoint,
+                chosenStations: Array.isArray(data.chosen_stations) ? data.chosen_stations : [],
+                hotplaces: data.hotplaces,
+                currentLocation: currentLocation ?? null,
+                receivedAt: new Date().toISOString(),
+            });
+
             const station = data.chosen_stations?.[0];
             if (station) {
-                const locationText = station.original_name;
+                const locationText = station.original_name || station.station_name;
                 setMidpointText(`대략적인 중앙 위치: ${locationText} 근처`);
                 setResultLocation(locationText);
             } else {
