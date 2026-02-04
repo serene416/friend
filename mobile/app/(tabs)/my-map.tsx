@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function MyMapScreen() {
     const router = useRouter();
@@ -124,89 +125,91 @@ export default function MyMapScreen() {
         : [];
 
     return (
-        <GestureHandlerRootView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>나의 지도</Text>
-            </View>
-            <View style={styles.mapContainer}>
-                <KakaoMap
-                    latitude={markers.length > 0 ? markers[0].lat : defaultCenter.lat}
-                    longitude={markers.length > 0 ? markers[0].lng : defaultCenter.lng}
-                    markers={markers}
-                    onMarkerClick={handleMarkerClick}
-                    onMapClick={handleMapClick}
-                />
-            </View>
+        <SafeAreaView style={styles.container}>
+            <GestureHandlerRootView style={styles.contentContainer}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>나의 지도</Text>
+                </View>
+                <View style={styles.mapContainer}>
+                    <KakaoMap
+                        latitude={markers.length > 0 ? markers[0].lat : defaultCenter.lat}
+                        longitude={markers.length > 0 ? markers[0].lng : defaultCenter.lng}
+                        markers={markers}
+                        onMarkerClick={handleMarkerClick}
+                        onMapClick={handleMapClick}
+                    />
+                </View>
 
-            {selectedItem && (
-                <BottomSheet
-                    ref={bottomSheetRef}
-                    index={0}
-                    snapPoints={snapPoints}
-                    enablePanDownToClose
-                    onClose={() => setSelectedMarkerId(null)}
-                    backgroundStyle={styles.sheetBackground}
-                    handleIndicatorStyle={styles.sheetIndicator}
-                >
-                    <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
-                        {/* Hero Image */}
-                        <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
+                {selectedItem && (
+                    <BottomSheet
+                        ref={bottomSheetRef}
+                        index={0}
+                        snapPoints={snapPoints}
+                        enablePanDownToClose
+                        onClose={() => setSelectedMarkerId(null)}
+                        backgroundStyle={styles.sheetBackground}
+                        handleIndicatorStyle={styles.sheetIndicator}
+                    >
+                        <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
+                            {/* Hero Image */}
+                            <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
 
-                        <View style={styles.sheetInfo}>
-                            {/* Title & Heart */}
-                            <View style={styles.titleContainer}>
-                                <Text style={styles.sheetTitle}>{selectedItem.title}</Text>
-                                {/* Heart icon logic could be added here if needed, keeping simple for now */}
-                            </View>
-
-                            {/* Meta Row */}
-                            <View style={styles.sheetMeta}>
-                                <View style={styles.metaItem}>
-                                    <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
-                                    <Text style={styles.metaText}>{selectedItem.distanceLabel}</Text>
+                            <View style={styles.sheetInfo}>
+                                {/* Title & Heart */}
+                                <View style={styles.titleContainer}>
+                                    <Text style={styles.sheetTitle}>{selectedItem.title}</Text>
+                                    {/* Heart icon logic could be added here if needed, keeping simple for now */}
                                 </View>
-                                <View style={styles.metaItem}>
-                                    <MaterialCommunityIcons name="tag" size={16} color="#666" />
-                                    <Text style={styles.metaText}>{selectedItem.category}</Text>
-                                </View>
-                            </View>
 
-                            {/* Activity Intro Section */}
-                            <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>활동 소개</Text>
-                                <Text style={styles.description}>{description}</Text>
-                            </View>
-
-                            {/* Highlights Section */}
-                            <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>주요 포인트</Text>
-                                {highlightItems.map((item, index) => (
-                                    <View key={index} style={styles.highlightItem}>
-                                        <MaterialCommunityIcons name={item.icon as any} size={20} color="#666" />
-                                        <Text style={styles.highlightText}>{item.text}</Text>
+                                {/* Meta Row */}
+                                <View style={styles.sheetMeta}>
+                                    <View style={styles.metaItem}>
+                                        <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
+                                        <Text style={styles.metaText}>{selectedItem.distanceLabel}</Text>
                                     </View>
-                                ))}
-                            </View>
+                                    <View style={styles.metaItem}>
+                                        <MaterialCommunityIcons name="tag" size={16} color="#666" />
+                                        <Text style={styles.metaText}>{selectedItem.category}</Text>
+                                    </View>
+                                </View>
 
-                            {/* Location Info Section */}
-                            <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>상세 정보</Text>
-                                {/* Address */}
-                                <View style={styles.infoRow}>
-                                    <MaterialCommunityIcons name="map-marker-outline" size={18} color="#888" />
-                                    <Text style={styles.infoText}>{selectedItem.address}</Text>
+                                {/* Activity Intro Section */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionTitle}>활동 소개</Text>
+                                    <Text style={styles.description}>{description}</Text>
                                 </View>
-                                {/* Phone */}
-                                <View style={styles.infoRow}>
-                                    <MaterialCommunityIcons name="phone-outline" size={18} color="#888" />
-                                    <Text style={styles.infoText}>{selectedItem.phone}</Text>
+
+                                {/* Highlights Section */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionTitle}>주요 포인트</Text>
+                                    {highlightItems.map((item, index) => (
+                                        <View key={index} style={styles.highlightItem}>
+                                            <MaterialCommunityIcons name={item.icon as any} size={20} color="#666" />
+                                            <Text style={styles.highlightText}>{item.text}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+
+                                {/* Location Info Section */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionTitle}>상세 정보</Text>
+                                    {/* Address */}
+                                    <View style={styles.infoRow}>
+                                        <MaterialCommunityIcons name="map-marker-outline" size={18} color="#888" />
+                                        <Text style={styles.infoText}>{selectedItem.address}</Text>
+                                    </View>
+                                    {/* Phone */}
+                                    <View style={styles.infoRow}>
+                                        <MaterialCommunityIcons name="phone-outline" size={18} color="#888" />
+                                        <Text style={styles.infoText}>{selectedItem.phone}</Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
-                    </BottomSheetScrollView>
-                </BottomSheet>
-            )}
-        </GestureHandlerRootView>
+                        </BottomSheetScrollView>
+                    </BottomSheet>
+                )}
+            </GestureHandlerRootView>
+        </SafeAreaView>
     );
 }
 
@@ -214,6 +217,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#fff',
+    },
+    contentContainer: {
+        flex: 1,
     },
     header: {
         paddingVertical: 15,
