@@ -150,26 +150,28 @@ export default function ActivityDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.imageContainer}>
           <Image source={{ uri: heroImage }} style={styles.heroImage} />
-          <TouchableOpacity
-            style={styles.favoriteButton}
-            onPress={() => {
-              if (!isFavorite(activityId)) {
-                setShowFavoritePopup(true);
-                setTimeout(() => setShowFavoritePopup(false), 3000);
-              }
-              toggleFavorite(activityId);
-            }}
-          >
-            <MaterialCommunityIcons
-              name={isFavorite(activityId) ? 'heart' : 'heart-outline'}
-              size={28}
-              color={isFavorite(activityId) ? '#FF4B4B' : '#fff'}
-            />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.infoContainer}>
-          <Text style={styles.title}>{title}</Text>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>{title}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (!isFavorite(activityId)) {
+                  setShowFavoritePopup(true);
+                  setTimeout(() => setShowFavoritePopup(false), 3000);
+                }
+                toggleFavorite(activityId);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons
+                name={isFavorite(activityId) ? 'heart' : 'heart-outline'}
+                size={28}
+                color={isFavorite(activityId) ? '#FF4B4B' : '#ccc'}
+              />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
@@ -306,24 +308,22 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#eee',
   },
-  favoriteButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    zIndex: 1,
-    // backgroundColor: 'rgba(0,0,0,0.3)', // Removed dark background
-    // borderRadius: 20,
-    padding: 8,
-  },
   infoContainer: {
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
   title: {
     fontSize: 28,
     fontFamily: 'Pretendard-Bold',
-    marginBottom: 16,
     color: '#333',
+    flex: 1,
+    marginRight: 10,
   },
   metaRow: {
     flexDirection: 'row',

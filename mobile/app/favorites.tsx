@@ -80,7 +80,19 @@ export default function FavoritesScreen() {
         >
           <Image source={{ uri: item.image }} style={styles.cardImage} />
           <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <TouchableOpacity
+                onPress={() => toggleFavorite(item.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons
+                  name="heart"
+                  size={24}
+                  color="#FF4B4B"
+                />
+              </TouchableOpacity>
+            </View>
             <View style={styles.cardMeta}>
               <Text style={styles.metaText}>{item.distanceLabel}</Text>
               <Text style={styles.metaText}>•</Text>
@@ -94,16 +106,6 @@ export default function FavoritesScreen() {
               ))}
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.listHeartButton}
-            onPress={() => toggleFavorite(item.id)}
-          >
-            <MaterialCommunityIcons
-              name="heart"
-              size={24}
-              color="#FF4B4B"
-            />
-          </TouchableOpacity>
         </TouchableOpacity >
       );
     }
@@ -115,7 +117,19 @@ export default function FavoritesScreen() {
       >
         <Image source={{ uri: item.image }} style={styles.cardImage} />
         <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <TouchableOpacity
+              onPress={() => toggleFavorite(item.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons
+                name="heart"
+                size={24}
+                color="#FF4B4B"
+              />
+            </TouchableOpacity>
+          </View>
           <View style={styles.cardMeta}>
             <Text style={styles.metaText}>{item.distance}km</Text>
             <Text style={styles.metaText}>•</Text>
@@ -175,7 +189,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee',
   },
   cardContent: { padding: 15 },
-  cardTitle: { fontSize: 18, fontFamily: 'Pretendard-Bold', marginBottom: 8 },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontFamily: 'Pretendard-Bold',
+    flex: 1,
+    marginRight: 8,
+  },
   cardMeta: { flexDirection: 'row', marginBottom: 10 },
   metaText: { fontSize: 14, color: '#666', marginRight: 5, fontFamily: 'Pretendard-Medium' },
   tags: { flexDirection: 'row', flexWrap: 'wrap' },
@@ -204,12 +229,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Pretendard-Medium',
     color: '#999',
-  },
-
-  listHeartButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    padding: 5,
   },
 });

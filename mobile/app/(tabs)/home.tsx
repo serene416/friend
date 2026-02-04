@@ -57,7 +57,7 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const { data, loading, error, permissionDenied } = useCurrentWeather();
-  const { toggleFavorite, isFavorite } = useFavoriteStore();
+  const { toggleFavorite, isFavorite, favorites } = useFavoriteStore();
   const [showFavoritePopup, setShowFavoritePopup] = useState(false);
   const recommendation = useRecommendationStore((state) => state.recommendation);
 
@@ -132,7 +132,25 @@ export default function HomeScreen() {
         >
           <Image source={{ uri: item.image }} style={styles.cardImage} />
           <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!isFavorite(item.id)) {
+                    setShowFavoritePopup(true);
+                    setTimeout(() => setShowFavoritePopup(false), 3000);
+                  }
+                  toggleFavorite(item.id);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons
+                  name={isFavorite(item.id) ? "heart" : "heart-outline"}
+                  size={24}
+                  color={isFavorite(item.id) ? "#FF4B4B" : "#ccc"}
+                />
+              </TouchableOpacity>
+            </View>
             <View style={styles.cardMeta}>
               <Text style={styles.metaText}>{item.distanceLabel}</Text>
               <Text style={styles.metaText}>•</Text>
@@ -146,22 +164,6 @@ export default function HomeScreen() {
               ))}
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.listHeartButton}
-            onPress={() => {
-              if (!isFavorite(item.id)) {
-                setShowFavoritePopup(true);
-                setTimeout(() => setShowFavoritePopup(false), 3000);
-              }
-              toggleFavorite(item.id);
-            }}
-          >
-            <MaterialCommunityIcons
-              name={isFavorite(item.id) ? "heart" : "heart-outline"}
-              size={24}
-              color={isFavorite(item.id) ? "#FF4B4B" : "#ccc"}
-            />
-          </TouchableOpacity>
         </TouchableOpacity>
       );
     }
@@ -173,7 +175,25 @@ export default function HomeScreen() {
       >
         <Image source={{ uri: item.image }} style={styles.cardImage} />
         <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (!isFavorite(item.id)) {
+                  setShowFavoritePopup(true);
+                  setTimeout(() => setShowFavoritePopup(false), 3000);
+                }
+                toggleFavorite(item.id);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons
+                name={isFavorite(item.id) ? "heart" : "heart-outline"}
+                size={24}
+                color={isFavorite(item.id) ? "#FF4B4B" : "#ccc"}
+              />
+            </TouchableOpacity>
+          </View>
           <View style={styles.cardMeta}>
             <Text style={styles.metaText}>{item.distance}km</Text>
             <Text style={styles.metaText}>•</Text>
@@ -189,22 +209,6 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.listHeartButton}
-          onPress={() => {
-            if (!isFavorite(item.id)) {
-              setShowFavoritePopup(true);
-              setTimeout(() => setShowFavoritePopup(false), 3000);
-            }
-            toggleFavorite(item.id);
-          }}
-        >
-          <MaterialCommunityIcons
-            name={isFavorite(item.id) ? "heart" : "heart-outline"}
-            size={24}
-            color={isFavorite(item.id) ? "#FF4B4B" : "#ccc"}
-          />
-        </TouchableOpacity>
       </TouchableOpacity >
     );
   };
@@ -213,6 +217,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={recommendationItems}
+        extraData={favorites}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
@@ -388,7 +393,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee',
   },
   cardContent: { padding: 15 },
-  cardTitle: { fontSize: 18, fontFamily: 'Pretendard-Bold', marginBottom: 8 },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontFamily: 'Pretendard-Bold',
+    flex: 1,
+    marginRight: 8,
+  },
   cardMeta: { flexDirection: 'row', marginBottom: 10 },
   metaText: {
     fontSize: 14,
@@ -406,14 +422,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tagText: { fontSize: 12, color: "#555", fontFamily: "Pretendard-Medium" },
-  listHeartButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    // backgroundColor: '#fff', // Optional: if we want a background circle
-    // borderRadius: 20,
-    padding: 5,
-  },
   popupContainer: {
     position: 'absolute',
     bottom: 30, // Above tab bar if present, or just bottom
