@@ -25,6 +25,7 @@ from app.schemas.recommendation import (
     RecommendationRequest,
 )
 from app.services.kakao_local_service import KakaoLocalService
+from app.services.ingestion_service import create_ingestion_job_from_hotplaces
 
 logger = logging.getLogger("app.recommendation")
 
@@ -136,6 +137,9 @@ class RecommendationService:
         )
         self.log_full_kakao_results = self._get_bool_env(
             "MIDPOINT_LOG_FULL_KAKAO_RESULTS", default=False
+        )
+        self.enable_ingestion_enqueue = self._get_bool_env(
+            "MIDPOINT_ENABLE_INGESTION_ENQUEUE", default=False
         )
 
         self._redis_client: Redis | None = None
@@ -402,6 +406,38 @@ class RecommendationService:
                 return mapped
         fallback = (fallback_category or "").strip()
         return fallback or "기타"
+
+    async def _maybe_enqueue_ingestion_job(
+        self,
+        request: MidpointHotplaceRequest,
+        midpoint: Midpoint,
+        hotplaces: list[MidpointHotplace],
+    ) -> None:
+        if not self.enable_ingestion_enqueue:
+            return
+        if not hotplaces:
+            logger.info("Skipping ingestion enqueue because there are no hotplaces")
+            return
+
+        try:
+            job_id = await create_ingestion_job_from_hotplaces(
+                hotplaces=[hotplace.model_dump() for hotplace in hotplaces],
+                source="midpoint-hotplaces",
+                request_context={
+                    "participant_count": len(request.participants),
+                    "station_radius": request.station_radius,
+                    "place_radius": request.place_radius,
+                    "size": request.size,
+                    "pages": request.pages,
+                    "midpoint": {"lat": midpoint.lat, "lng": midpoint.lng},
+                },
+            )
+            logger.info("Enqueued ingestion job from midpoint-hotplaces: job_id=%s", job_id)
+        except Exception:
+            logger.warning(
+                "Failed to enqueue ingestion job for midpoint-hotplaces; continuing response flow",
+                exc_info=True,
+            )
 
     async def _fetch_keyword_page(
         self,
@@ -701,4 +737,9 @@ class RecommendationService:
 
         cache_backend = await self._set_cached_response(cache_key, response)
         response.meta.cache_backend = cache_backend
+        await self._maybe_enqueue_ingestion_job(
+            request=request,
+            midpoint=midpoint,
+            hotplaces=hotplaces,
+        )
         return response

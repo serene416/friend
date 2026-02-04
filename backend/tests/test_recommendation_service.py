@@ -1,7 +1,7 @@
 import asyncio
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 from fastapi import HTTPException
@@ -149,6 +149,30 @@ class RecommendationServiceTests(unittest.TestCase):
             self.assertEqual(context.exception.status_code, 503)
             self.assertIn("all-or-nothing policy", str(context.exception.detail))
             self.assertEqual(fake.station_calls, 1)
+
+    def test_midpoint_hotplaces_response_unchanged_when_ingestion_enqueue_fails(self):
+        with patch.dict(
+            os.environ,
+            {
+                "MAX_KAKAO_CALLS_PER_REQUEST": "70",
+                "MIDPOINT_ENABLE_INGESTION_ENQUEUE": "true",
+                "MIDPOINT_CACHE_TTL_SECONDS": "900",
+            },
+            clear=False,
+        ):
+            os.environ.pop("REDIS_URL", None)
+            fake = FakeKakaoLocalService()
+            service = RecommendationService(kakao_local_service=fake)
+
+            with patch(
+                "app.services.recommendation_service.create_ingestion_job_from_hotplaces",
+                new=AsyncMock(side_effect=RuntimeError("enqueue failed")),
+            ) as mock_enqueue:
+                response = self._run(service.get_midpoint_hotplaces(_build_request()))
+
+            self.assertGreater(response.meta.hotplace_count, 0)
+            self.assertEqual(response.meta.actual_kakao_api_call_count, 58)
+            mock_enqueue.assert_awaited_once()
 
 
 if __name__ == "__main__":

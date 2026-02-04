@@ -8,7 +8,17 @@ from fastapi.responses import JSONResponse
 from app.core.db import init_db
 from app.core.logging import configure_logging
 # Import models to register them with metadata
-from app.models.sql import User, Place, Friendship, Group, AITask, Invite
+from app.models.sql import (
+    AITask,
+    Friendship,
+    Group,
+    IngestionJob,
+    IngestionJobItem,
+    Invite,
+    Place,
+    PlaceIngestionFeature,
+    User,
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,7 +29,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: Disconnect DBs
     print("Shutting down...")
 
-from app.routers import auth, friends, recommendation, users
+from app.routers import auth, friends, internal_ingestion, recommendation, users
 
 configure_logging()
 logger = logging.getLogger("app")
@@ -55,6 +65,11 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
 app.include_router(recommendation.router, prefix="/api/v1/recommend", tags=["Recommendation"])
+app.include_router(
+    internal_ingestion.router,
+    prefix="/api/v1/internal/ingestion",
+    tags=["Internal Ingestion"],
+)
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 
 @app.exception_handler(HTTPException)
