@@ -31,6 +31,8 @@ export interface MidpointHotplace {
   source_keyword: string;
   representative_image_url?: string | null;
   photo_urls?: string[];
+  naver_rating?: number | null;
+  naver_rating_count?: number | null;
 }
 
 export interface MidpointHotplaceResponse {

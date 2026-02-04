@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FriendSelector from '../../components/FriendSelector';
-import { Activity, MOCK_ACTIVITIES } from '../../constants/data';
+import { Activity } from '../../constants/data';
 import { useCurrentWeather } from '../../hooks/useCurrentWeather';
 import { useFavoriteStore } from '../../store/useFavoriteStore';
 import { useFriendStore } from '../../store/useFriendStore';
@@ -19,7 +19,6 @@ import { useRecommendationStore } from '../../store/useRecommendationStore';
 import {
   formatDistanceKm,
   getDistanceKmFromCurrentLocation,
-  getHotplaceImageUrl,
   mapSourceKeywordToPlayCategory,
   metersToKm,
 } from '../../utils/recommendation';
@@ -28,10 +27,12 @@ interface HotplaceCardItem {
   kind: 'hotplace';
   id: string;
   title: string;
-  image: string;
+  image?: string | null;
   distanceLabel: string;
   category: string;
   sourceKeyword: string;
+  naverRating?: number | null;
+  naverRatingCount?: number | null;
 }
 
 type HomeCardItem = (Activity & { kind: 'mock' }) | HotplaceCardItem;
@@ -92,9 +93,27 @@ export default function HomeScreen() {
       return [];
     }
 
-    const sortedHotplaces = [...recommendation.hotplaces].sort((a, b) =>
-      a.kakao_place_id.localeCompare(b.kakao_place_id)
-    );
+    const sortedHotplaces = [...recommendation.hotplaces].sort((a, b) => {
+      const aHasPhoto = Boolean(a.representative_image_url || a.photo_urls?.length);
+      const bHasPhoto = Boolean(b.representative_image_url || b.photo_urls?.length);
+      if (aHasPhoto !== bHasPhoto) {
+        return aHasPhoto ? -1 : 1;
+      }
+
+      const aDistance = getDistanceKmFromCurrentLocation(a, recommendation.currentLocation) ?? metersToKm(a.distance);
+      const bDistance = getDistanceKmFromCurrentLocation(b, recommendation.currentLocation) ?? metersToKm(b.distance);
+      if (aDistance !== null && bDistance !== null && aDistance !== bDistance) {
+        return aDistance - bDistance;
+      }
+      if (aDistance !== null && bDistance === null) {
+        return -1;
+      }
+      if (aDistance === null && bDistance !== null) {
+        return 1;
+      }
+
+      return a.kakao_place_id.localeCompare(b.kakao_place_id);
+    });
 
     return sortedHotplaces.map((hotplace) => {
       const distanceKm =
@@ -108,25 +127,20 @@ export default function HomeScreen() {
         image:
           hotplace.representative_image_url ??
           hotplace.photo_urls?.[0] ??
-          getHotplaceImageUrl(hotplace.kakao_place_id),
+          null,
         distanceLabel: formatDistanceKm(distanceKm),
         category: mapSourceKeywordToPlayCategory(
           hotplace.source_keyword,
           hotplace.category_name
         ),
         sourceKeyword: hotplace.source_keyword,
+        naverRating: hotplace.naver_rating ?? null,
+        naverRatingCount: hotplace.naver_rating_count ?? null,
       };
     });
   }, [recommendation]);
 
-  const fallbackItems = useMemo<(Activity & { kind: 'mock' })[]>(
-    () => MOCK_ACTIVITIES.map((activity) => ({ ...activity, kind: 'mock' })),
-    []
-  );
-
-  const recommendationItems = selectedFriends.length > 0
-    ? (hotplaceItems.length > 0 ? hotplaceItems : fallbackItems)
-    : [];
+  const recommendationItems = selectedFriends.length > 0 ? hotplaceItems : [];
 
   const renderItem = ({ item }: { item: HomeCardItem }) => {
     if (item.kind === 'hotplace') {
@@ -137,7 +151,14 @@ export default function HomeScreen() {
           style={styles.card}
           onPress={() => router.push(`/activity-detail?id=${encodeURIComponent(item.id)}`)}
         >
-          <Image source={{ uri: item.image }} style={styles.cardImage} />
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.cardImage} />
+          ) : (
+            <View style={styles.cardImagePlaceholder}>
+              <MaterialCommunityIcons name='image-off-outline' size={32} color='#9DA3AF' />
+              <Text style={styles.cardImagePlaceholderText}>사진 수집 대기 중</Text>
+            </View>
+          )}
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>{item.title}</Text>
@@ -162,6 +183,24 @@ export default function HomeScreen() {
               <Text style={styles.metaText}>{item.distanceLabel}</Text>
               <Text style={styles.metaText}>•</Text>
               <Text style={styles.metaText}>{item.category}</Text>
+              {(typeof item.naverRating === 'number' || typeof item.naverRatingCount === 'number') && (
+                <>
+                  <Text style={styles.metaText}>•</Text>
+                  <View style={styles.ratingMeta}>
+                    {typeof item.naverRating === 'number' && (
+                      <MaterialCommunityIcons name='star' size={14} color='#F59E0B' />
+                    )}
+                    <Text style={styles.metaText}>
+                      {typeof item.naverRating === 'number'
+                        ? `${item.naverRating.toFixed(1)}${typeof item.naverRatingCount === 'number'
+                          ? ` (${item.naverRatingCount.toLocaleString()}명)`
+                          : ''
+                        }`
+                        : `평점 참여 ${item.naverRatingCount?.toLocaleString()}명`}
+                    </Text>
+                  </View>
+                </>
+              )}
             </View>
             <View style={styles.tags}>
               {tags.map((tag) => (
@@ -406,6 +445,21 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     backgroundColor: '#eee',
   },
+  cardImagePlaceholder: {
+    width: '100%',
+    height: 180,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  cardImagePlaceholderText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'Pretendard-Medium',
+  },
   cardContent: { padding: 15 },
   cardHeader: {
     flexDirection: 'row',
@@ -419,12 +473,17 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  cardMeta: { flexDirection: 'row', marginBottom: 10 },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   metaText: {
     fontSize: 14,
     color: '#666',
     marginRight: 5,
     fontFamily: 'Pretendard-Medium',
+  },
+  ratingMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   tags: { flexDirection: 'row', flexWrap: 'wrap' },
   tag: {

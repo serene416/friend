@@ -5,7 +5,6 @@ import { useRecommendationStore } from '@/store/useRecommendationStore';
 import {
   formatDistanceKm,
   getDistanceKmFromCurrentLocation,
-  getHotplaceImageUrl,
   mapSourceKeywordToPlayCategory,
   metersToKm,
 } from '@/utils/recommendation';
@@ -73,9 +72,7 @@ export default function ActivityDetailScreen() {
     : activity?.distance ?? null;
 
   const title = hotplace?.place_name ?? activity?.title ?? '활동 정보 없음';
-  const fallbackHeroImage = hotplace
-    ? hotplace.representative_image_url ?? getHotplaceImageUrl(hotplace.kakao_place_id)
-    : activity?.image ?? getHotplaceImageUrl(`fallback-${activityId || 'unknown'}`);
+  const fallbackHeroImage = hotplace ? null : activity?.image ?? null;
   const photoGallery = useMemo(
     () =>
       hotplace?.photo_urls
@@ -83,7 +80,22 @@ export default function ActivityDetailScreen() {
         .slice(0, 5) ?? [],
     [hotplace?.photo_urls]
   );
-  const galleryImages = photoGallery.length > 0 ? photoGallery : [fallbackHeroImage];
+  const representativeHotplaceImage =
+    typeof hotplace?.representative_image_url === 'string' &&
+    hotplace.representative_image_url.startsWith('http')
+      ? hotplace.representative_image_url
+      : null;
+
+  const galleryImages = hotplace
+    ? photoGallery.length > 0
+      ? photoGallery
+      : representativeHotplaceImage
+        ? [representativeHotplaceImage]
+        : []
+    : fallbackHeroImage
+      ? [fallbackHeroImage]
+      : [];
+
   const heroImageWidth = Math.max(windowWidth - 0.1, 1);
 
   const highlightItems = hotplace
@@ -180,29 +192,38 @@ export default function ActivityDetailScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.imageContainer}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handlePhotoScrollEnd}
-            style={styles.imagePager}
-          >
-            {galleryImages.map((imageUri, index) => (
-              <Image
-                key={`${activityId || title}-${index}`}
-                source={{ uri: imageUri }}
-                style={[styles.heroImage, { width: heroImageWidth }]}
-              />
-            ))}
-          </ScrollView>
-          {galleryImages.length > 1 && (
-            <View style={styles.paginationContainer}>
-              {galleryImages.map((_, index) => (
-                <View
-                  key={`pagination-${index}`}
-                  style={[styles.paginationDot, index === activePhotoIndex && styles.paginationDotActive]}
-                />
-              ))}
+          {galleryImages.length > 0 ? (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={handlePhotoScrollEnd}
+                style={styles.imagePager}
+              >
+                {galleryImages.map((imageUri, index) => (
+                  <Image
+                    key={`${activityId || title}-${index}`}
+                    source={{ uri: imageUri }}
+                    style={[styles.heroImage, { width: heroImageWidth }]}
+                  />
+                ))}
+              </ScrollView>
+              {galleryImages.length > 1 && (
+                <View style={styles.paginationContainer}>
+                  {galleryImages.map((_, index) => (
+                    <View
+                      key={`pagination-${index}`}
+                      style={[styles.paginationDot, index === activePhotoIndex && styles.paginationDotActive]}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.heroImagePlaceholder}>
+              <MaterialCommunityIcons name='image-off-outline' size={36} color='#9DA3AF' />
+              <Text style={styles.heroImagePlaceholderText}>수집된 장소 사진이 아직 없어요</Text>
             </View>
           )}
         </View>
@@ -365,6 +386,19 @@ const styles = StyleSheet.create({
   heroImage: {
     height: '100%',
     backgroundColor: '#eee',
+  },
+  heroImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  heroImagePlaceholderText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontFamily: 'Pretendard-Medium',
   },
   paginationContainer: {
     position: 'absolute',

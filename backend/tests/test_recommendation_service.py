@@ -129,6 +129,19 @@ class RecommendationServiceTests(unittest.TestCase):
             self.assertEqual(fake.station_calls, 1)
             self.assertEqual(len(fake.keyword_queries), len(PREDEFINED_PLAY_KEYWORDS))
 
+    def test_extract_rating_summary_from_feature_payload(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        rating, rating_count = service._extract_rating_summary_from_feature_payload(
+            {
+                "naver_rating_summary": {
+                    "average_rating": 4.37,
+                    "rating_count": 1289,
+                }
+            }
+        )
+        self.assertEqual(rating, 4.37)
+        self.assertEqual(rating_count, 1289)
+
     def test_midpoint_hotplaces_fails_entire_request_on_single_keyword_error(self):
         with patch.dict(
             os.environ,

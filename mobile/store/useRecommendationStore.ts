@@ -27,6 +27,24 @@ interface RecommendationState {
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
+const toOptionalRating = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value < 0 || value > 5) {
+    return null;
+  }
+  return Math.round(value * 10) / 10;
+};
+
+const toOptionalPositiveInt = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+  const normalized = Math.floor(value);
+  return normalized > 0 ? normalized : null;
+};
+
 const normalizeCoordinate = (value?: Coordinate | null): Coordinate | null => {
   if (!value || !isFiniteNumber(value.lat) || !isFiniteNumber(value.lng)) {
     return null;
@@ -70,6 +88,8 @@ const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => {
     y: isFiniteNumber(hotplace.y) ? hotplace.y : 0,
     photo_urls: photoUrls,
     representative_image_url: representative,
+    naver_rating: toOptionalRating(hotplace.naver_rating),
+    naver_rating_count: toOptionalPositiveInt(hotplace.naver_rating_count),
   };
 };
 

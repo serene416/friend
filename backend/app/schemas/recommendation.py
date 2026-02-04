@@ -98,6 +98,8 @@ class MidpointHotplace(BaseModel):
     source_keyword: str
     representative_image_url: Optional[str] = None
     photo_urls: List[str] = Field(default_factory=list)
+    naver_rating: Optional[float] = None
+    naver_rating_count: Optional[int] = None
 
 
 class MidpointHotplaceMeta(BaseModel):

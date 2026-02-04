@@ -11,6 +11,53 @@ from worker.crawlers import naver_place
 
 
 class NaverPlaceCrawlerTests(unittest.TestCase):
+    def test_parse_naver_rating_summary_from_text(self):
+        summary = naver_place._parse_naver_rating_summary("별점 4.6 평점 1,234명")
+        self.assertEqual(summary["average_rating"], 4.6)
+        self.assertEqual(summary["rating_count"], 1234)
+
+    def test_parse_naver_rating_summary_from_html_fallback(self):
+        summary = naver_place._parse_naver_rating_summary(
+            "",
+            '{"visitorReviewScore":4.28,"visitorReviewScoreCount":321}',
+        )
+        self.assertEqual(summary["average_rating"], 4.28)
+        self.assertEqual(summary["rating_count"], 321)
+
+    def test_parse_naver_rating_summary_from_visitor_reviews_payload(self):
+        summary = naver_place._parse_naver_rating_summary(
+            "",
+            '{"visitorReviewsTotal":54,"visitorReviewsScore":4.31}',
+        )
+        self.assertEqual(summary["average_rating"], 4.31)
+        self.assertEqual(summary["rating_count"], 54)
+
+    def test_parse_naver_rating_summary_from_avg_rating_payload(self):
+        summary = naver_place._parse_naver_rating_summary(
+            "",
+            '{"review":{"avgRating":4.13,"totalCount":42}}',
+        )
+        self.assertEqual(summary["average_rating"], 4.13)
+        self.assertEqual(summary["rating_count"], 42)
+
+    def test_parse_naver_rating_summary_from_participant_text(self):
+        summary = naver_place._parse_naver_rating_summary("별점 4.5 31명 참여")
+        self.assertEqual(summary["average_rating"], 4.5)
+        self.assertEqual(summary["rating_count"], 31)
+
+    def test_parse_naver_rating_summary_ignores_irrelevant_review_count(self):
+        summary = naver_place._parse_naver_rating_summary("방문자 리뷰 120")
+        self.assertEqual(summary, {})
+
+    def test_mapping_name_cleaning_and_noise_filter(self):
+        self.assertEqual(
+            naver_place._clean_candidate_name("무늬와 공간갤러리,화랑"),
+            "무늬와 공간갤러리",
+        )
+        self.assertTrue(naver_place._is_noisy_candidate_name("이미지수 4"))
+        self.assertTrue(naver_place._is_noisy_candidate_name("운영 종료10:00에 운영 시작"))
+        self.assertFalse(naver_place._is_noisy_candidate_name("무늬와 공간갤러리"))
+
     def test_mapping_score_selection_prefers_better_combined_score(self):
         candidates = [
             {
@@ -67,6 +114,26 @@ class NaverPlaceCrawlerTests(unittest.TestCase):
         )
         self.assertEqual(len(deduped_photos), 2)
         self.assertEqual({photo["image_url"] for photo in deduped_photos}, {"https://example.com/a.jpg", "https://example.com/b.jpg"})
+
+        proxy_url_a = (
+            "https://search.pstatic.net/common/?type=f&src="
+            "https%3A%2F%2Fldb-phinf.pstatic.net%2Fabc.jpg"
+        )
+        proxy_url_b = (
+            "https://search.pstatic.net/common/?type=g&src="
+            "https%3A%2F%2Fldb-phinf.pstatic.net%2Fabc.jpg"
+        )
+        deduped_proxy_photos = naver_place._dedupe_photos(
+            [
+                {"image_url": proxy_url_a},
+                {"image_url": proxy_url_b},
+            ]
+        )
+        self.assertEqual(len(deduped_proxy_photos), 1)
+        self.assertEqual(
+            deduped_proxy_photos[0]["image_url"],
+            "https://ldb-phinf.pstatic.net/abc.jpg",
+        )
 
     def test_mapping_failure_returns_safe_payload(self):
         fake_session = MagicMock()

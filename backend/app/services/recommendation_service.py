@@ -209,6 +209,30 @@ class RecommendationService:
                 break
         return deduped
 
+    @staticmethod
+    def _to_optional_rating(value: object) -> float | None:
+        if value is None or value == "":
+            return None
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return None
+        if parsed < 0 or parsed > 5:
+            return None
+        return round(parsed, 2)
+
+    @staticmethod
+    def _to_optional_positive_int(value: object) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            parsed = int(float(value))
+        except (TypeError, ValueError):
+            return None
+        if parsed <= 0:
+            return None
+        return parsed
+
     def _extract_photo_urls_from_feature_payload(self, feature_payload: object) -> list[str]:
         if not isinstance(feature_payload, dict):
             return []
@@ -224,11 +248,26 @@ class RecommendationService:
             photo_urls.append(sample.get("image_url"))
         return self._normalize_photo_urls(photo_urls)
 
-    async def _fetch_hotplace_photo_urls(
+    def _extract_rating_summary_from_feature_payload(
+        self,
+        feature_payload: object,
+    ) -> tuple[float | None, int | None]:
+        if not isinstance(feature_payload, dict):
+            return None, None
+
+        raw_summary = feature_payload.get("naver_rating_summary")
+        if not isinstance(raw_summary, dict):
+            return None, None
+
+        average_rating = self._to_optional_rating(raw_summary.get("average_rating"))
+        rating_count = self._to_optional_positive_int(raw_summary.get("rating_count"))
+        return average_rating, rating_count
+
+    async def _fetch_hotplace_feature_map(
         self,
         session: AsyncSession | None,
         kakao_place_ids: list[str],
-    ) -> dict[str, list[str]]:
+    ) -> dict[str, dict[str, object]]:
         if session is None or not kakao_place_ids:
             return {}
 
@@ -242,19 +281,26 @@ class RecommendationService:
             ).scalars().all()
         except Exception:
             logger.warning(
-                "Failed to load place_ingestion_feature photos; continuing without images",
+                "Failed to load place_ingestion_feature data; continuing without ingestion features",
                 exc_info=True,
             )
             return {}
 
-        photo_map: dict[str, list[str]] = {}
+        feature_map: dict[str, dict[str, object]] = {}
         for row in rows:
             photo_urls = self._extract_photo_urls_from_feature_payload(row.feature_payload)
-            if photo_urls:
-                photo_map[row.kakao_place_id] = photo_urls
-        return photo_map
+            naver_rating, naver_rating_count = self._extract_rating_summary_from_feature_payload(
+                row.feature_payload
+            )
+            if photo_urls or naver_rating is not None or naver_rating_count is not None:
+                feature_map[row.kakao_place_id] = {
+                    "photo_urls": photo_urls,
+                    "naver_rating": naver_rating,
+                    "naver_rating_count": naver_rating_count,
+                }
+        return feature_map
 
-    async def _attach_hotplace_photos(
+    async def _attach_hotplace_features(
         self,
         hotplaces: list[MidpointHotplace],
         session: AsyncSession | None,
@@ -263,19 +309,33 @@ class RecommendationService:
             return hotplaces
 
         kakao_place_ids = [hotplace.kakao_place_id for hotplace in hotplaces]
-        photo_map = await self._fetch_hotplace_photo_urls(session, kakao_place_ids)
-        if not photo_map:
+        feature_map = await self._fetch_hotplace_feature_map(session, kakao_place_ids)
+        if not feature_map:
             return hotplaces
 
         enriched: list[MidpointHotplace] = []
         for hotplace in hotplaces:
-            photo_urls = photo_map.get(hotplace.kakao_place_id, [])
+            feature = feature_map.get(hotplace.kakao_place_id, {})
+            raw_photo_urls = feature.get("photo_urls")
+            photo_urls = (
+                self._normalize_photo_urls(raw_photo_urls) if isinstance(raw_photo_urls, list) else []
+            )
             representative = photo_urls[0] if photo_urls else hotplace.representative_image_url
+            naver_rating = self._to_optional_rating(feature.get("naver_rating"))
+            naver_rating_count = self._to_optional_positive_int(feature.get("naver_rating_count"))
             enriched.append(
                 hotplace.model_copy(
                     update={
-                        "photo_urls": photo_urls,
+                        "photo_urls": photo_urls if photo_urls else hotplace.photo_urls,
                         "representative_image_url": representative,
+                        "naver_rating": (
+                            naver_rating if naver_rating is not None else hotplace.naver_rating
+                        ),
+                        "naver_rating_count": (
+                            naver_rating_count
+                            if naver_rating_count is not None
+                            else hotplace.naver_rating_count
+                        ),
                     }
                 )
             )
@@ -631,7 +691,7 @@ class RecommendationService:
                     "kakao_api_call_count": 0,
                 }
             )
-            cached_hotplaces = await self._attach_hotplace_photos(cached_response.hotplaces, session)
+            cached_hotplaces = await self._attach_hotplace_features(cached_response.hotplaces, session)
             return cached_response.model_copy(update={"meta": cached_meta, "hotplaces": cached_hotplaces})
 
         logger.info(
@@ -769,7 +829,7 @@ class RecommendationService:
                 deduped_hotplaces[hotplace.kakao_place_id] = hotplace
 
         hotplaces = list(deduped_hotplaces.values())
-        hotplaces = await self._attach_hotplace_photos(hotplaces, session)
+        hotplaces = await self._attach_hotplace_features(hotplaces, session)
         hotplaces.sort(
             key=lambda item: (item.distance is None, item.distance if item.distance is not None else 0)
         )
@@ -787,6 +847,8 @@ class RecommendationService:
                     ),
                     "representative_image_url": hotplace.representative_image_url,
                     "photo_count": len(hotplace.photo_urls),
+                    "naver_rating": hotplace.naver_rating,
+                    "naver_rating_count": hotplace.naver_rating_count,
                 }
                 for hotplace in hotplaces
             ]

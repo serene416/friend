@@ -21,6 +21,8 @@ logger = logging.getLogger("worker.ingestion")
 
 BROKER_URL = os.getenv("CELERY_BROKER_URL") or os.getenv("REDIS_URL", "redis://redis:6379/0")
 RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND") or os.getenv("REDIS_URL", "redis://redis:6379/0")
+FEATURE_REVIEW_SAMPLE_LIMIT = int(os.getenv("INGESTION_REVIEW_SAMPLE_LIMIT", "50"))
+FEATURE_PHOTO_SAMPLE_LIMIT = int(os.getenv("INGESTION_PHOTO_SAMPLE_LIMIT", "50"))
 
 app = Celery("tasks", broker=BROKER_URL, backend=RESULT_BACKEND)
 
@@ -202,12 +204,16 @@ def _upsert_place_ingestion_feature(
     photos: list[dict[str, Any]],
     trend_payload: dict[str, Any],
     naver_mapping_payload: dict[str, Any] | None = None,
+    naver_rating_summary: dict[str, Any] | None = None,
 ) -> None:
+    review_sample = reviews[:FEATURE_REVIEW_SAMPLE_LIMIT]
+    photo_sample = photos[:FEATURE_PHOTO_SAMPLE_LIMIT]
     feature_payload = {
-        "latest_review_sample": reviews,
-        "latest_photo_sample": photos,
+        "latest_review_sample": review_sample,
+        "latest_photo_sample": photo_sample,
         "instagram_raw": trend_payload,
         "naver_mapping": naver_mapping_payload or {},
+        "naver_rating_summary": naver_rating_summary or {},
         "source_keyword": item.get("source_keyword"),
         "source_station": item.get("source_station"),
     }
@@ -311,6 +317,7 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
                 reviews = naver_bundle.get("reviews", [])
                 photos = naver_bundle.get("photos", [])
                 naver_mapping = naver_bundle.get("mapping", {}) or {}
+                naver_rating_summary = naver_bundle.get("rating_summary", {}) or {}
                 trend_payload = crawl_instagram_trend(item["kakao_place_id"], item.get("place_name"))
 
                 _write_raw_to_mongo(
@@ -331,6 +338,7 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
                             photos=photos,
                             trend_payload=trend_payload,
                             naver_mapping_payload=naver_mapping,
+                            naver_rating_summary=naver_rating_summary,
                         )
                         if naver_bundle.get("status") == "SKIPPED":
                             _set_item_skipped(

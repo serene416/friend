@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from math import asin, cos, radians, sin, sqrt
 from typing import Any, Callable
-from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
+from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 
 try:
     from playwright.sync_api import (
@@ -39,13 +39,13 @@ MAPPING_URLS = [
 ]
 
 REVIEW_URLS = [
-    "https://m.place.naver.com/place/{place_id}/review/visitor",
     "https://pcmap.place.naver.com/restaurant/{place_id}/review/visitor",
+    "https://m.place.naver.com/place/{place_id}/review/visitor",
 ]
 
 PHOTO_URLS = [
-    "https://m.place.naver.com/place/{place_id}/photo",
     "https://pcmap.place.naver.com/restaurant/{place_id}/photo",
+    "https://m.place.naver.com/place/{place_id}/photo",
 ]
 
 REVIEW_MORE_BUTTON_SELECTORS = [
@@ -102,8 +102,6 @@ PHOTO_ITEM_SELECTORS = [
     "img[src*='naver.net']",
     "div[class*='photo'] img[src]",
     "figure img[src]",
-    "li img[src]",
-    "img[src]",
 ]
 
 PHOTO_DATE_SELECTORS = [
@@ -123,6 +121,47 @@ PLACE_ID_PATTERNS = [
 NON_WORD_PATTERN = re.compile(r"[^0-9a-z가-힣\\s]+", re.IGNORECASE)
 DATE_PATTERN = re.compile(r"(?P<year>\d{2,4})[./-](?P<month>\d{1,2})[./-](?P<day>\d{1,2})")
 RELATIVE_DATE_PATTERN = re.compile(r"(?P<count>\d+)\s*(?P<unit>분|시간|일|주|개월|달|년)\s*전")
+NOISY_MAPPING_NAME_PATTERNS = [
+    re.compile(r"^이미지수\s*\d+", re.IGNORECASE),
+    re.compile(r"지도보기", re.IGNORECASE),
+    re.compile(r"영업\s*중", re.IGNORECASE),
+    re.compile(r"운영\s*중", re.IGNORECASE),
+    re.compile(r"운영\s*종료", re.IGNORECASE),
+]
+
+RATING_SCORE_TEXT_PATTERNS = [
+    re.compile(r"(?:별점|평점)\s*([0-5](?:[.,]\d{1,2})?)"),
+    re.compile(r"([0-5](?:[.,]\d{1,2})?)\s*(?:점|/5)"),
+]
+
+RATING_COUNT_TEXT_PATTERNS = [
+    re.compile(r"(?:평점|별점)\s*(?:참여|인원|인증)?\s*([0-9][0-9,]*)\s*명"),
+    re.compile(r"([0-9][0-9,]*)\s*명(?:이|의)?\s*(?:평점|별점)"),
+    re.compile(r"([0-9][0-9,]*)\s*명\s*참여"),
+    re.compile(r"([0-9][0-9,]*)\s*개\s*평점"),
+]
+
+RATING_SCORE_COUNT_HTML_PATTERNS = [
+    re.compile(
+        r'"visitorReviewsScore"\s*:\s*"?([0-5](?:\.\d{1,3})?)"?[\s\S]{0,240}?"visitorReviewsTotal"\s*:\s*"?([0-9][0-9,]*)"?',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'"avgRating"\s*:\s*"?([0-5](?:\.\d{1,3})?)"?[\s\S]{0,240}?"totalCount"\s*:\s*"?([0-9][0-9,]*)"?',
+        re.IGNORECASE,
+    ),
+]
+
+RATING_SCORE_HTML_PATTERNS = [
+    re.compile(r'"(?:visitorReviewScore|starScore|averageRating|ratingScore)"\s*:\s*"?([0-5](?:\.\d{1,3})?)"?', re.IGNORECASE),
+    re.compile(r'"visitorReviewsScore"\s*:\s*"?([0-5](?:\.\d{1,3})?)"?', re.IGNORECASE),
+    re.compile(r'"avgRating"\s*:\s*"?([0-5](?:\.\d{1,3})?)"?', re.IGNORECASE),
+]
+
+RATING_COUNT_HTML_PATTERNS = [
+    re.compile(r'"(?:visitorReviewScoreCount|visitorReviewCount|ratingCount|starCount)"\s*:\s*"?([0-9][0-9,]*)"?', re.IGNORECASE),
+    re.compile(r'"visitorReviewsTotal"\s*:\s*"?([0-9][0-9,]*)"?', re.IGNORECASE),
+]
 
 
 @dataclass(frozen=True)
@@ -203,6 +242,36 @@ def _normalize_text(value: str | None) -> str:
     return " ".join(cleaned.split())
 
 
+def _clean_candidate_name(value: str | None) -> str:
+    normalized = " ".join((value or "").split()).strip()
+    if not normalized:
+        return ""
+
+    # Naver often appends category text ("상호명,카테고리") in the same anchor.
+    if "," in normalized:
+        normalized = normalized.split(",", 1)[0].strip()
+
+    return normalized
+
+
+def _is_noisy_candidate_name(value: str | None) -> bool:
+    text = _clean_candidate_name(value)
+    if not text:
+        return True
+
+    compact = text.replace(" ", "")
+    if len(compact) < 2:
+        return True
+
+    if compact.isdigit():
+        return True
+
+    for pattern in NOISY_MAPPING_NAME_PATTERNS:
+        if pattern.search(text):
+            return True
+    return False
+
+
 def _name_similarity(left: str | None, right: str | None) -> float:
     left_norm = _normalize_text(left)
     right_norm = _normalize_text(right)
@@ -232,6 +301,114 @@ def _to_optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _to_optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_rating_score(value: str | None) -> float | None:
+    if not value:
+        return None
+    normalized = value.strip().replace(",", ".")
+    normalized = re.sub(r"[^0-9.]+", "", normalized)
+    if not normalized:
+        return None
+    try:
+        score = float(normalized)
+    except ValueError:
+        return None
+    if score < 0 or score > 5:
+        return None
+    return round(score, 2)
+
+
+def _parse_rating_count(value: str | None) -> int | None:
+    if not value:
+        return None
+    digits = re.sub(r"[^0-9]+", "", value)
+    if not digits:
+        return None
+    count = _to_optional_int(digits)
+    if count is None or count <= 0:
+        return None
+    return count
+
+
+def _parse_naver_rating_summary(
+    content_text: str | None,
+    html: str | None = None,
+) -> dict[str, Any]:
+    text = " ".join((content_text or "").split())
+    html_text = html or ""
+
+    score: float | None = None
+    rating_count: int | None = None
+
+    for pattern in RATING_SCORE_COUNT_HTML_PATTERNS:
+        match = pattern.search(html_text)
+        if not match:
+            continue
+        parsed_score = _parse_rating_score(match.group(1))
+        parsed_count = _parse_rating_count(match.group(2))
+        if parsed_score is not None:
+            score = parsed_score
+        if parsed_count is not None:
+            rating_count = parsed_count
+        if score is not None and rating_count is not None:
+            break
+
+    for pattern in RATING_SCORE_TEXT_PATTERNS:
+        match = pattern.search(text)
+        if not match:
+            continue
+        parsed_score = _parse_rating_score(match.group(1))
+        if parsed_score is not None:
+            score = parsed_score
+            break
+
+    if score is None:
+        for pattern in RATING_SCORE_HTML_PATTERNS:
+            match = pattern.search(html_text)
+            if not match:
+                continue
+            parsed_score = _parse_rating_score(match.group(1))
+            if parsed_score is not None:
+                score = parsed_score
+                break
+
+    if rating_count is None:
+        for pattern in RATING_COUNT_TEXT_PATTERNS:
+            match = pattern.search(text)
+            if not match:
+                continue
+            parsed_count = _parse_rating_count(match.group(1))
+            if parsed_count is not None:
+                rating_count = parsed_count
+                break
+
+    if rating_count is None:
+        for pattern in RATING_COUNT_HTML_PATTERNS:
+            match = pattern.search(html_text)
+            if not match:
+                continue
+            parsed_count = _parse_rating_count(match.group(1))
+            if parsed_count is not None:
+                rating_count = parsed_count
+                break
+
+    if score is None and rating_count is None:
+        return {}
+
+    return {
+        "average_rating": score,
+        "rating_count": rating_count,
+    }
 
 
 def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -492,6 +669,27 @@ def _safe_extract(
     return []
 
 
+def _is_unusable_content_page(page: Page) -> bool:
+    """
+    Detect pages that technically load but have no crawlable content
+    (common for some m.place routes in headless environments).
+    """
+    try:
+        html_len = len(page.content())
+    except Exception:
+        return False
+
+    if html_len >= 10000:
+        return False
+
+    try:
+        interactive_count = page.locator("a, button, img").count()
+    except Exception:
+        interactive_count = 0
+
+    return interactive_count < 5
+
+
 def _extract_text(locator: Any, selectors: list[str]) -> str | None:
     for selector in selectors:
         try:
@@ -522,6 +720,30 @@ def _extract_attr(locator: Any, attributes: list[str]) -> str | None:
         if value:
             return value.strip()
     return None
+
+
+def _extract_rating_summary(page: Page) -> dict[str, Any]:
+    page_text = ""
+    page_html = ""
+
+    try:
+        page_text = (page.inner_text("body", timeout=1500) or "").strip()
+    except Exception:
+        page_text = ""
+
+    try:
+        page_html = page.content() or ""
+    except Exception:
+        page_html = ""
+
+    summary = _parse_naver_rating_summary(page_text, page_html)
+    if summary:
+        logger.info(
+            "naver.review.rating_summary average=%s count=%s",
+            summary.get("average_rating"),
+            summary.get("rating_count"),
+        )
+    return summary
 
 
 def _parse_posted_at_iso(raw_value: str | None) -> str | None:
@@ -609,7 +831,22 @@ def _dedupe_reviews(reviews: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _normalize_image_url(url: str) -> str:
-    return url.split("?")[0].strip()
+    raw_url = url.strip()
+    parsed = urlparse(raw_url)
+    if "search.pstatic.net" in parsed.netloc and parsed.path.startswith("/common"):
+        src_param = parse_qs(parsed.query).get("src", [None])[0]
+        if src_param:
+            return unquote(src_param).strip()
+    return parsed._replace(query="", fragment="").geturl()
+
+
+def _photo_dedupe_key(url: str) -> str:
+    parsed = urlparse(url.strip())
+    if "search.pstatic.net" in parsed.netloc and parsed.path.startswith("/common"):
+        src_param = parse_qs(parsed.query).get("src", [None])[0]
+        if src_param:
+            return unquote(src_param).strip()
+    return parsed._replace(query="", fragment="").geturl()
 
 
 def _dedupe_photos(photos: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -621,7 +858,8 @@ def _dedupe_photos(photos: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
 
         image_url = _normalize_image_url(image_url_raw)
-        if not image_url or image_url in deduped:
+        dedupe_key = _photo_dedupe_key(image_url_raw)
+        if not image_url or not dedupe_key or dedupe_key in deduped:
             continue
 
         captured_at = str(photo.get("captured_at") or "").strip() or None
@@ -630,7 +868,7 @@ def _dedupe_photos(photos: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not isinstance(metadata, dict):
             metadata = {}
 
-        deduped[image_url] = {
+        deduped[dedupe_key] = {
             "photo_id": f"photo-{hashlib.sha1(image_url.encode('utf-8')).hexdigest()[:16]}",
             "image_url": image_url,
             "captured_at": captured_at,
@@ -675,8 +913,13 @@ def _extract_mapping_candidates(
                     continue
 
                 resolved_href = urljoin(page.url, href)
+                if "/place/list" in resolved_href:
+                    continue
+                if "/photo" in urlparse(resolved_href).path:
+                    continue
+
                 naver_place_id = _parse_place_id(resolved_href)
-                if not naver_place_id or naver_place_id in candidates:
+                if not naver_place_id:
                     continue
 
                 anchor_text = _extract_text(anchor, ["span", "strong", "em"])
@@ -689,9 +932,10 @@ def _extract_mapping_candidates(
                     except Exception:
                         anchor_text = ""
 
-                if not anchor_text:
+                matched_name = _clean_candidate_name(anchor_text)
+                if _is_noisy_candidate_name(matched_name):
                     continue
-                matched_name = anchor_text
+
                 candidate_x = _extract_coord_from_href(resolved_href, "x")
                 candidate_y = _extract_coord_from_href(resolved_href, "y")
                 if candidate_x is None:
@@ -699,13 +943,22 @@ def _extract_mapping_candidates(
                 if candidate_y is None:
                     candidate_y = _extract_coord_from_href(resolved_href, "lat")
 
-                candidates[naver_place_id] = {
+                current_candidate = {
                     "naver_place_id": naver_place_id,
                     "matched_name": matched_name,
                     "x": candidate_x,
                     "y": candidate_y,
                     "source_url": target_url,
                 }
+                existing = candidates.get(naver_place_id)
+                if existing is None:
+                    candidates[naver_place_id] = current_candidate
+                    continue
+
+                existing_score = _name_similarity(place_name, existing.get("matched_name"))
+                current_score = _name_similarity(place_name, current_candidate.get("matched_name"))
+                if current_score > existing_score:
+                    candidates[naver_place_id] = current_candidate
 
         logger.info(
             "naver.mapping.search_iter url=%s candidates=%s",
@@ -764,6 +1017,7 @@ def resolve_naver_place_mapping(
         payload["confidence"] = best_candidate["confidence"]
         payload["distance_m"] = best_candidate.get("distance_m")
         payload["matched_name"] = best_candidate["matched_name"]
+        payload["top_candidates"] = scored_candidates[:3]
 
         if best_candidate["confidence"] < MAP_MIN_CONFIDENCE:
             payload["reason"] = "low_confidence"
@@ -785,7 +1039,6 @@ def resolve_naver_place_mapping(
                 "confidence": best_candidate["confidence"],
                 "distance_m": best_candidate.get("distance_m"),
                 "crawlable": True,
-                "top_candidates": scored_candidates[:3],
             }
         )
         logger.info(
@@ -857,20 +1110,29 @@ def _crawl_reviews_with_page(
     page: Page,
     naver_place_id: str,
     config: NaverCrawlerConfig,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     selected_url = None
     for template in REVIEW_URLS:
         candidate_url = template.format(place_id=naver_place_id)
         if _safe_goto(page, candidate_url, timeout_ms=config.timeout_ms):
+            _paced_wait(page, config, multiplier=0.8)
+            if _is_unusable_content_page(page):
+                logger.info(
+                    "naver.review.url_rejected naver_place_id=%s url=%s reason=thin_content",
+                    naver_place_id,
+                    candidate_url,
+                )
+                continue
             selected_url = candidate_url
             break
 
     if not selected_url:
         logger.warning("naver.review.open_failed naver_place_id=%s", naver_place_id)
-        return []
+        return [], {}
 
     _safe_click(page, REVIEW_TAB_SELECTORS, timeout_ms=config.timeout_ms, action_name="review_open_tab")
     _paced_wait(page, config)
+    rating_summary = _extract_rating_summary(page)
 
     collected = _dedupe_reviews(_safe_extract(lambda: _extract_reviews(page, naver_place_id), action_name="review_extract"))
     guard = _NoGrowthGuard(config.no_growth_limit, baseline=len(collected))
@@ -921,38 +1183,47 @@ def _crawl_reviews_with_page(
             break
 
     logger.info(
-        "naver.review.done naver_place_id=%s count=%s",
+        "naver.review.done naver_place_id=%s count=%s rating=%s rating_count=%s",
         naver_place_id,
         len(collected),
+        rating_summary.get("average_rating"),
+        rating_summary.get("rating_count"),
     )
-    return collected
+    return collected, rating_summary
 
 
 def _extract_photos(page: Page, naver_place_id: str) -> list[dict[str, Any]]:
     extracted: list[dict[str, Any]] = []
     page_url = page.url
+    seen_urls: set[str] = set()
+    max_total = 120
 
     for selector in PHOTO_ITEM_SELECTORS:
+        if len(extracted) >= max_total:
+            break
         try:
             locator = page.locator(selector)
-            count = min(locator.count(), 500)
+            count = min(locator.count(), 40)
         except Exception:
             count = 0
 
         for index in range(count):
             image = locator.nth(index)
-            image_url = _extract_attr(image, ["src", "data-src", "data-original"])
+            image_url = _extract_attr(
+                image,
+                ["src", "data-src", "data-original", "data-lazy-src", "data-image-src"],
+            )
             if not image_url or image_url.startswith("data:"):
                 continue
+
+            normalized_key = _photo_dedupe_key(image_url)
+            if not normalized_key or normalized_key in seen_urls:
+                continue
+            seen_urls.add(normalized_key)
 
             alt = _extract_attr(image, ["alt"])
             title = _extract_attr(image, ["title"])
             captured_at = None
-            try:
-                container = image.locator("xpath=ancestor::*[self::li or self::figure or self::article][1]")
-                captured_at = _extract_text(container, PHOTO_DATE_SELECTORS)
-            except Exception:
-                captured_at = None
 
             extracted.append(
                 {
@@ -967,6 +1238,8 @@ def _extract_photos(page: Page, naver_place_id: str) -> list[dict[str, Any]]:
                     },
                 }
             )
+            if len(extracted) >= max_total:
+                break
 
     return extracted
 
@@ -980,6 +1253,14 @@ def _crawl_photos_with_page(
     for template in PHOTO_URLS:
         candidate_url = template.format(place_id=naver_place_id)
         if _safe_goto(page, candidate_url, timeout_ms=config.timeout_ms):
+            _paced_wait(page, config, multiplier=0.8)
+            if _is_unusable_content_page(page):
+                logger.info(
+                    "naver.photo.url_rejected naver_place_id=%s url=%s reason=thin_content",
+                    naver_place_id,
+                    candidate_url,
+                )
+                continue
             selected_url = candidate_url
             break
 
@@ -1055,6 +1336,7 @@ def crawl_naver_place_bundle(
         "skip_reason": mapping.get("reason"),
         "reviews": [],
         "photos": [],
+        "rating_summary": {},
     }
 
     if not mapping.get("crawlable"):
@@ -1078,7 +1360,9 @@ def crawl_naver_place_bundle(
         session = _create_browser_session(config)
 
         try:
-            result["reviews"] = _crawl_reviews_with_page(session.page, naver_place_id, config)
+            reviews, rating_summary = _crawl_reviews_with_page(session.page, naver_place_id, config)
+            result["reviews"] = reviews
+            result["rating_summary"] = rating_summary
         except Exception as exc:
             warnings.append(f"review_error:{exc}")
             logger.warning(
@@ -1088,6 +1372,7 @@ def crawl_naver_place_bundle(
                 exc_info=True,
             )
             result["reviews"] = []
+            result["rating_summary"] = {}
 
         try:
             result["photos"] = _crawl_photos_with_page(session.page, naver_place_id, config)
@@ -1106,11 +1391,13 @@ def crawl_naver_place_bundle(
             result["warnings"] = warnings
 
         logger.info(
-            "naver.crawl.done kakao_place_id=%s naver_place_id=%s review_count=%s photo_count=%s status=%s",
+            "naver.crawl.done kakao_place_id=%s naver_place_id=%s review_count=%s photo_count=%s rating=%s rating_count=%s status=%s",
             kakao_place_id,
             naver_place_id,
             len(result["reviews"]),
             len(result["photos"]),
+            result.get("rating_summary", {}).get("average_rating"),
+            result.get("rating_summary", {}).get("rating_count"),
             result["status"],
         )
         return result

@@ -36,7 +36,8 @@ docker-compose up --build
 Kakao Local API setup for midpoint hotplace recommendations:
 - Set `KAKAO_REST_API_KEY=<your_kakao_rest_api_key>` in your backend environment (`.env` or Docker env).
 - Optional debug logs: set `MIDPOINT_LOG_FULL_KAKAO_RESULTS=true` to print full Kakao station/keyword documents and mapped category/activity info in backend logs.
-- Optional ingestion enqueue: set `MIDPOINT_ENABLE_INGESTION_ENQUEUE=true` to create async ingestion jobs after midpoint recommendations are finalized.
+- Midpoint ingestion enqueue is enabled by default in `docker-compose.yml` via `MIDPOINT_ENABLE_INGESTION_ENQUEUE=${MIDPOINT_ENABLE_INGESTION_ENQUEUE:-true}`.
+  - Set `MIDPOINT_ENABLE_INGESTION_ENQUEUE=false` to disable async Stage 2 crawling.
 - Optional dedicated Celery broker URL: set `CELERY_BROKER_URL=redis://...` (if omitted, services fall back to `REDIS_URL`).
 - Optional CORS override: `CORS_ALLOWED_ORIGINS=http://localhost:19006,https://your-ngrok-domain.ngrok-free.app`
 - Restart backend after updating env vars.
@@ -146,6 +147,8 @@ You can tune crawler safety/behavior with:
 - `NAVER_NO_GROWTH_LIMIT` (default: `3`)
 - `NAVER_REQUEST_DELAY_MS` (default: `350`)
 - `NAVER_CRAWLER_USER_AGENT` (optional, default: unset)
+- `INGESTION_REVIEW_SAMPLE_LIMIT` (default: `50`, max stored in `feature_payload.latest_review_sample`)
+- `INGESTION_PHOTO_SAMPLE_LIMIT` (default: `50`, max stored in `feature_payload.latest_photo_sample`)
 
 ### Stage 2 crawler safety notes
 
