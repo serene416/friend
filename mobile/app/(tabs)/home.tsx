@@ -232,7 +232,7 @@ export default function HomeScreen() {
         ListEmptyComponent={
           selectedFriends.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>친구를 선택해주세요</Text>
+              <Text style={styles.emptyText}>오늘 누구랑 놀까요? 친구를 선택해보세요! 🥳</Text>
             </View>
           ) : null
         }
@@ -328,7 +328,7 @@ export default function HomeScreen() {
               setShowFavoritePopup(false);
               router.push('/favorites' as any);
             }}>
-              <Text style={styles.popupLink}>관심 목록으로 바로보기 &gt;</Text>
+              <Text style={styles.popupLink}>관심목록 보기</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
   },
   popupContent: {
     backgroundColor: 'rgba(30, 30, 30, 0.9)',
-    borderRadius: 24,
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 20,
     flexDirection: 'row',
