@@ -107,9 +107,9 @@ class RecommendationServiceTests(unittest.TestCase):
             self.assertEqual(response.meta.actual_kakao_api_call_count, 58)
             self.assertEqual(fake.station_calls, 1)
             self.assertEqual(len(fake.keyword_queries), len(PREDEFINED_PLAY_KEYWORDS))
-            self.assertTrue(all(query.startswith("강남 ") for query in fake.keyword_queries))
+            self.assertTrue(all(query.startswith("강남역 ") for query in fake.keyword_queries))
             for keyword in PREDEFINED_PLAY_KEYWORDS:
-                self.assertIn(f"강남 {keyword}", fake.keyword_queries)
+                self.assertIn(f"강남역 {keyword}", fake.keyword_queries)
 
     def test_midpoint_hotplaces_cache_hit_and_miss(self):
         with patch.dict(

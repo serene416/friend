@@ -104,6 +104,18 @@ PREDEFINED_PLAY_KEYWORDS: list[str] = [
     for keywords in PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY.values()
     for keyword in keywords
 ]
+
+
+def _normalize_keyword(keyword: str) -> str:
+    return "".join(keyword.split()).lower()
+
+
+KEYWORD_TO_PLAY_CATEGORY: dict[str, str] = {
+    _normalize_keyword(keyword): category
+    for category, keywords in PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY.items()
+    for keyword in keywords
+}
+
 FIXED_STATION_LIMIT = 1
 FIXED_PAGES = 1
 
@@ -121,6 +133,9 @@ class RecommendationService:
         )
         self.cache_ttl_seconds = self._get_int_env(
             "MIDPOINT_CACHE_TTL_SECONDS", default=900, minimum=1
+        )
+        self.log_full_kakao_results = self._get_bool_env(
+            "MIDPOINT_LOG_FULL_KAKAO_RESULTS", default=False
         )
 
         self._redis_client: Redis | None = None
@@ -150,6 +165,26 @@ class RecommendationService:
             logger.warning("Invalid %s=%s; using default=%s", name, raw_value, default)
             return default
         return max(minimum, parsed)
+
+    @staticmethod
+    def _get_bool_env(name: str, default: bool) -> bool:
+        raw_value = os.getenv(name)
+        if raw_value is None:
+            return default
+        normalized = raw_value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        logger.warning("Invalid %s=%s; using default=%s", name, raw_value, default)
+        return default
+
+    @staticmethod
+    def _to_json_log(data: object) -> str:
+        try:
+            return json.dumps(data, ensure_ascii=False)
+        except TypeError:
+            return str(data)
 
     async def get_recommendations(
         self, session: AsyncSession, request: RecommendationRequest
@@ -199,6 +234,20 @@ class RecommendationService:
         if station_name.endswith("역"):
             station_name = station_name[:-1].strip()
         return station_name or raw_station_name.strip()
+
+    @staticmethod
+    def _build_station_keyword(raw_station_name: str) -> str:
+        station_name = raw_station_name.strip()
+        if not station_name:
+            return raw_station_name.strip()
+
+        station_suffix_index = station_name.find("역")
+        if station_suffix_index >= 0:
+            # Keep only "<역명>역" to avoid extra line info like "월평역 대전 1호선".
+            return station_name[: station_suffix_index + 1].strip()
+
+        # Fallback: use the first token only.
+        return station_name.split()[0]
 
     @staticmethod
     def _to_float(value: object | None, default: float = 0.0) -> float:
@@ -342,6 +391,18 @@ class RecommendationService:
             source_keyword=source_keyword,
         )
 
+    @staticmethod
+    def _map_keyword_to_play_category(
+        source_keyword: str | None,
+        fallback_category: str | None,
+    ) -> str:
+        if source_keyword:
+            mapped = KEYWORD_TO_PLAY_CATEGORY.get(_normalize_keyword(source_keyword))
+            if mapped:
+                return mapped
+        fallback = (fallback_category or "").strip()
+        return fallback or "기타"
+
     async def _fetch_keyword_page(
         self,
         client: httpx.AsyncClient,
@@ -351,7 +412,8 @@ class RecommendationService:
         request: MidpointHotplaceRequest,
         semaphore: asyncio.Semaphore,
     ) -> tuple[str, str, list[dict]]:
-        query = f"{station.station_name} {keyword}".strip()
+        query_station_name = self._build_station_keyword(station.original_name)
+        query = f"{query_station_name} {keyword}".strip()
         try:
             async with semaphore:
                 documents = await self.kakao_local_service.search_places_by_keyword(
@@ -382,6 +444,15 @@ class RecommendationService:
             len(documents),
             [doc.get("place_name") for doc in documents[:3]],
         )
+        if self.log_full_kakao_results:
+            logger.info(
+                "KAKAO_RAW_KEYWORD_RESULTS query=%s station=%s keyword=%s page=%s documents=%s",
+                query,
+                station.original_name,
+                keyword,
+                page,
+                self._to_json_log(documents),
+            )
         return station.station_name, keyword, documents
 
     async def get_midpoint_hotplaces(
@@ -469,6 +540,13 @@ class RecommendationService:
                 radius=request.station_radius,
                 limit=applied_station_limit,
             )
+            if self.log_full_kakao_results:
+                logger.info(
+                    "KAKAO_RAW_STATION_RESULTS midpoint=(%.6f, %.6f) documents=%s",
+                    midpoint.lat,
+                    midpoint.lng,
+                    self._to_json_log(station_docs),
+                )
             actual_kakao_calls = 1
 
             chosen_stations: list[MidpointStation] = []
@@ -564,6 +642,27 @@ class RecommendationService:
         hotplaces.sort(
             key=lambda item: (item.distance is None, item.distance if item.distance is not None else 0)
         )
+
+        if self.log_full_kakao_results:
+            mapped_hotplaces = [
+                {
+                    "kakao_place_id": hotplace.kakao_place_id,
+                    "place_name": hotplace.place_name,
+                    "kakao_category_name": hotplace.category_name,
+                    "source_keyword": hotplace.source_keyword,
+                    "activity_category": self._map_keyword_to_play_category(
+                        hotplace.source_keyword,
+                        hotplace.category_name,
+                    ),
+                    "representative_image_url": None,
+                }
+                for hotplace in hotplaces
+            ]
+            logger.info(
+                "MIDPOINT_MAPPED_HOTPLACE_RESULTS total=%s documents=%s",
+                len(mapped_hotplaces),
+                self._to_json_log(mapped_hotplaces),
+            )
 
         logger.info(
             "Midpoint hotplace result: midpoint=(%.6f, %.6f) stations=%s hotplaces=%s sample_stations=%s sample_hotplaces=%s",
