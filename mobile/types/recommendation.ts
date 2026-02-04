@@ -23,6 +23,7 @@ export interface MidpointHotplace {
   address_name?: string | null;
   road_address_name?: string | null;
   place_url?: string | null;
+  phone?: string | null;
   x: number;
   y: number;
   distance?: number | null;
