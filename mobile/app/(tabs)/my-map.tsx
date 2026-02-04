@@ -10,10 +10,9 @@ import {
     metersToKm,
 } from '@/utils/recommendation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function MyMapScreen() {
@@ -22,10 +21,6 @@ export default function MyMapScreen() {
     const recommendation = useRecommendationStore((state) => state.recommendation);
     const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
     const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
-    const bottomSheetRef = useRef<BottomSheet>(null);
-
-    // Snap points: collapsed (120px) -> half -> full
-    const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
 
     const markers = useMemo(() => {
         return favorites
@@ -81,12 +76,10 @@ export default function MyMapScreen() {
 
     const handleMarkerClick = useCallback((id: string) => {
         setSelectedMarkerId(id);
-        bottomSheetRef.current?.snapToIndex(0); // Open sheet
     }, []);
 
     const handleMapClick = useCallback(() => {
         setSelectedMarkerId(null);
-        bottomSheetRef.current?.close();
     }, []);
 
     if (!favorites || favorites.length === 0) {
@@ -119,16 +112,17 @@ export default function MyMapScreen() {
             </View>
 
             {selectedItem && (
-                <BottomSheet
-                    ref={bottomSheetRef}
-                    index={0}
-                    snapPoints={snapPoints}
-                    enablePanDownToClose
-                    onClose={() => setSelectedMarkerId(null)}
-                    backgroundStyle={styles.sheetBackground}
-                    handleIndicatorStyle={styles.sheetIndicator}
+                <Modal
+                    animationType="slide"
+                    transparent
+                    visible={Boolean(selectedItem)}
+                    onRequestClose={() => setSelectedMarkerId(null)}
                 >
-                    <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
+                    <View style={styles.sheetOverlay}>
+                        <Pressable style={styles.sheetBackdrop} onPress={() => setSelectedMarkerId(null)} />
+                        <View style={styles.sheetContainer}>
+                            <View style={styles.sheetIndicator} />
+                            <ScrollView contentContainerStyle={styles.sheetContent} bounces={false}>
                         {/* Header with image */}
                         <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
 
@@ -174,8 +168,10 @@ export default function MyMapScreen() {
                                 <Text style={styles.ctaButtonText}>상세 정보 보기</Text>
                             </TouchableOpacity>
                         </View>
-                    </BottomSheetScrollView>
-                </BottomSheet>
+                            </ScrollView>
+                        </View>
+                    </View>
+                </Modal>
             )}
         </GestureHandlerRootView>
     );
@@ -218,7 +214,15 @@ const styles = StyleSheet.create({
         fontFamily: 'Pretendard-Medium',
         color: '#888',
     },
-    sheetBackground: {
+    sheetOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
+    },
+    sheetBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    },
+    sheetContainer: {
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
@@ -227,10 +231,16 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 10,
         elevation: 10,
+        maxHeight: '85%',
     },
     sheetIndicator: {
         backgroundColor: '#ccc',
         width: 40,
+        height: 4,
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginTop: 10,
+        marginBottom: 6,
     },
     sheetContent: {
         paddingBottom: 40,
