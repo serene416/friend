@@ -5,6 +5,7 @@ import { WebView } from "react-native-webview";
 const KAKAO_MAP_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_MAP_JS_KEY;
 
 interface MarkerItem {
+  id: string;
   lat: number;
   lng: number;
   title?: string;
@@ -14,9 +15,11 @@ interface KakaoMapProps {
   latitude: number;
   longitude: number;
   markers?: MarkerItem[];
+  onMarkerClick?: (id: string) => void;
+  onMapClick?: () => void;
 }
 
-export default function KakaoMap({ latitude, longitude, markers = [] }: KakaoMapProps) {
+export default function KakaoMap({ latitude, longitude, markers = [], onMarkerClick, onMapClick }: KakaoMapProps) {
   const html = useMemo(() => {
     const markersData = JSON.stringify(markers);
 
@@ -53,11 +56,8 @@ export default function KakaoMap({ latitude, longitude, markers = [] }: KakaoMap
             var markersData = ${markersData};
             
             // Custom marker image with smaller size
-            var imageSrc = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png"; 
-            // Or use the standard blue marker: "https://t1.daumcdn.net/mapjsapi/images/marker.png"
-            // Let's use the standard one but smaller.
             var imageSrc = "https://t1.daumcdn.net/mapjsapi/images/marker.png";
-            var imageSize = new kakao.maps.Size(22, 30); // Reduced size (default is approx 29x42)
+            var imageSize = new kakao.maps.Size(22, 30); // Reduced size
             var markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize);
 
             if (markersData && markersData.length > 0) {
@@ -67,18 +67,15 @@ export default function KakaoMap({ latitude, longitude, markers = [] }: KakaoMap
                 var position = new kakao.maps.LatLng(m.lat, m.lng);
                 var marker = new kakao.maps.Marker({ 
                     position: position,
-                    image: markerImage // Apply custom image size
+                    image: markerImage 
                 });
                 marker.setMap(map);
                 
-                if (m.title) {
-                  var infowindow = new kakao.maps.InfoWindow({
-                    content: '<div style="padding:5px;font-size:12px;">' + m.title + '</div>'
-                  });
-                   kakao.maps.event.addListener(marker, 'click', function() {
-                      infowindow.open(map, marker);
-                   });
-                }
+                kakao.maps.event.addListener(marker, 'click', function() {
+                  if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'markerClick', id: m.id }));
+                  }
+                });
                 
                 bounds.extend(position);
               });
@@ -90,13 +87,18 @@ export default function KakaoMap({ latitude, longitude, markers = [] }: KakaoMap
                 map.setCenter(new kakao.maps.LatLng(markersData[0].lat, markersData[0].lng));
               }
             } else {
-              // Default single marker with resized image
               var marker = new kakao.maps.Marker({ 
                   position: center,
                   image: markerImage 
               });
               marker.setMap(map);
             }
+            
+            kakao.maps.event.addListener(map, 'click', function() {
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'mapClick' }));
+              }
+            });
           });
         };
         document.head.appendChild(script);
@@ -115,6 +117,18 @@ export default function KakaoMap({ latitude, longitude, markers = [] }: KakaoMap
         domStorageEnabled
         scrollEnabled={false}
         style={styles.webView}
+        onMessage={(event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data);
+            if (data.type === 'markerClick' && onMarkerClick) {
+              onMarkerClick(data.id);
+            } else if (data.type === 'mapClick' && onMapClick) {
+              onMapClick();
+            }
+          } catch (e) {
+            // ignore JSON parse error
+          }
+        }}
       />
     </View>
   );
