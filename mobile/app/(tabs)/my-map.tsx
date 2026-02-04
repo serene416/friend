@@ -4,11 +4,13 @@ import { useFavoriteStore } from '@/store/useFavoriteStore';
 import { useRecommendationStore } from '@/store/useRecommendationStore';
 import { formatDistanceKm, getDistanceKmFromCurrentLocation, getHotplaceImageUrl, mapSourceKeywordToPlayCategory, metersToKm } from '@/utils/recommendation';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function MyMapScreen() {
+    const router = useRouter();
     const { favorites } = useFavoriteStore();
     const recommendation = useRecommendationStore((state) => state.recommendation);
     const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
@@ -94,7 +96,7 @@ export default function MyMapScreen() {
                             style={styles.card}
                             activeOpacity={0.9}
                             onPress={() => {
-                                // Optional: navigate to details if needed
+                                router.push(`/activity-detail?id=${encodeURIComponent(selectedItem.id)}`);
                             }}
                         >
                             <Image source={{ uri: selectedItem.image }} style={styles.cardImage} />
@@ -125,10 +127,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     header: {
-        paddingHorizontal: 20,
         paddingVertical: 15,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
+        alignItems: 'center', // Center content
+        justifyContent: 'center',
     },
     headerTitle: {
         fontSize: 20,
