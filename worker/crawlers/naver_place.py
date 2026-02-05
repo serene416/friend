@@ -122,6 +122,7 @@ PLACE_ID_PATTERNS = [
 ]
 
 NON_WORD_PATTERN = re.compile(r"[^0-9a-z가-힣\\s]+", re.IGNORECASE)
+ADDRESS_SUFFIX_TRIM_PATTERN = re.compile(r"(?:\s+\d+[층호]\S*)+$")
 DATE_PATTERN = re.compile(r"(?P<year>\d{2,4})[./-](?P<month>\d{1,2})[./-](?P<day>\d{1,2})")
 RELATIVE_DATE_PATTERN = re.compile(r"(?P<count>\d+)\s*(?P<unit>분|시간|일|주|개월|달|년)\s*전")
 NOISY_MAPPING_NAME_PATTERNS = [
@@ -165,6 +166,10 @@ RATING_COUNT_HTML_PATTERNS = [
     re.compile(r'"(?:visitorReviewScoreCount|visitorReviewCount|ratingCount|starCount)"\s*:\s*"?([0-9][0-9,]*)"?', re.IGNORECASE),
     re.compile(r'"visitorReviewsTotal"\s*:\s*"?([0-9][0-9,]*)"?', re.IGNORECASE),
 ]
+
+NAVER_ROUTE_CODE_PATTERN = re.compile(r"(?:^|[;|])code\^([^;|]+)")
+NAVER_ROUTE_LNG_PATTERN = re.compile(r"(?:^|[;|])longitude\^([0-9.+-]+)")
+NAVER_ROUTE_LAT_PATTERN = re.compile(r"(?:^|[;|])latitude\^([0-9.+-]+)")
 
 
 @dataclass(frozen=True)
@@ -644,6 +649,10 @@ def _build_mapping_queries(place_name: str, kakao_context: dict[str, Any]) -> li
         str(kakao_context.get("road_address_name") or "").strip()
         or str(kakao_context.get("address_name") or "").strip()
     )
+    for address_query in _build_address_query_variants(address_hint):
+        queries.append(address_query)
+        queries.append(f"{address_query} {normalized_name}".strip())
+
     region_tokens = _extract_region_tokens(address_hint, max_tokens=3)
     if region_tokens:
         queries.append(f"{' '.join(region_tokens)} {normalized_name}".strip())
@@ -663,6 +672,72 @@ def _build_mapping_queries(place_name: str, kakao_context: dict[str, Any]) -> li
         seen.add(key)
         deduped.append(normalized_query)
     return deduped
+
+
+def _build_address_query_variants(address: str | None) -> list[str]:
+    normalized = " ".join((address or "").split()).strip()
+    if not normalized:
+        return []
+
+    variants = [normalized]
+    trimmed = ADDRESS_SUFFIX_TRIM_PATTERN.sub("", normalized).strip()
+    if trimmed and trimmed != normalized:
+        variants.append(trimmed)
+
+    tokens = normalized.split()
+    if len(tokens) >= 3:
+        variants.append(" ".join(tokens[:3]))
+    if len(tokens) >= 4:
+        variants.append(" ".join(tokens[:4]))
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for variant in variants:
+        cleaned = " ".join(variant.split()).strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(cleaned)
+    return deduped
+
+
+def _extract_route_coord_lookup(page: Page) -> dict[str, tuple[float, float]]:
+    lookup: dict[str, tuple[float, float]] = {}
+    try:
+        locator = page.locator("a[href*='nso_path']")
+        count = min(locator.count(), 120)
+    except Exception:
+        return lookup
+
+    for index in range(count):
+        anchor = locator.nth(index)
+        href = _extract_attr(anchor, ["href"])
+        if not href:
+            continue
+
+        parsed = urlparse(urljoin(page.url, href))
+        nso_path_raw = parse_qs(parsed.query).get("nso_path", [None])[0]
+        if not nso_path_raw:
+            continue
+        nso_path = unquote(nso_path_raw)
+
+        code_match = NAVER_ROUTE_CODE_PATTERN.search(nso_path)
+        lng_match = NAVER_ROUTE_LNG_PATTERN.search(nso_path)
+        lat_match = NAVER_ROUTE_LAT_PATTERN.search(nso_path)
+        if not code_match or not lng_match or not lat_match:
+            continue
+
+        naver_place_id = str(code_match.group(1) or "").strip()
+        lng = _to_optional_float(lng_match.group(1))
+        lat = _to_optional_float(lat_match.group(1))
+        if not naver_place_id or lng is None or lat is None:
+            continue
+        lookup[naver_place_id] = (lng, lat)
+
+    return lookup
 
 
 def _parse_place_id(href: str | None) -> str | None:
@@ -748,7 +823,11 @@ def _select_best_mapping_candidate(
         else:
             distance_score = 0.0
 
-        confidence = (name_score * 0.62) + (region_score * 0.23) + (distance_score * 0.15)
+        if distance_m is None:
+            confidence = (name_score * 0.78) + (region_score * 0.22)
+        else:
+            # Address-based mapping with a name-similarity safety guard.
+            confidence = (name_score * 0.55) + (region_score * 0.10) + (distance_score * 0.35)
         if distance_m is not None and distance_m > 10000:
             confidence -= 0.35
         elif distance_m is not None and distance_m > 5000:
@@ -1168,17 +1247,20 @@ def _extract_mapping_candidates(
     query_variants: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
-    limit = max(1, config.mapping_candidate_limit)
+    target_limit = max(1, config.mapping_candidate_limit)
+    discovery_limit = max(12, target_limit * 6)
     normalized_queries = query_variants or [place_name.strip()]
     normalized_queries = [query for query in normalized_queries if query.strip()]
 
     for query in normalized_queries:
+        query_new_candidates = 0
         for template in MAPPING_URLS:
             target_url = template.format(query=quote_plus(query))
             if not _safe_goto(page, target_url, timeout_ms=config.timeout_ms):
                 continue
 
             _paced_wait(page, config, multiplier=0.8)
+            route_coord_lookup = _extract_route_coord_lookup(page)
 
             for selector in (
                 "a[href*='m.place.naver.com/place/']",
@@ -1188,7 +1270,7 @@ def _extract_mapping_candidates(
             ):
                 try:
                     locator = page.locator(selector)
-                    count = min(locator.count(), max(15, limit * 6))
+                    count = min(locator.count(), max(24, target_limit * 10))
                 except Exception:
                     count = 0
 
@@ -1238,6 +1320,12 @@ def _extract_mapping_candidates(
                         candidate_x = _extract_coord_from_href(resolved_href, "lng")
                     if candidate_y is None:
                         candidate_y = _extract_coord_from_href(resolved_href, "lat")
+                    if (candidate_x is None or candidate_y is None) and naver_place_id in route_coord_lookup:
+                        route_x, route_y = route_coord_lookup[naver_place_id]
+                        if candidate_x is None:
+                            candidate_x = route_x
+                        if candidate_y is None:
+                            candidate_y = route_y
 
                     current_candidate = {
                         "naver_place_id": naver_place_id,
@@ -1250,6 +1338,7 @@ def _extract_mapping_candidates(
                     existing = candidates.get(naver_place_id)
                     if existing is None:
                         candidates[naver_place_id] = current_candidate
+                        query_new_candidates += 1
                     else:
                         existing_score = _name_similarity(place_name, existing.get("matched_name"))
                         current_score = _name_similarity(place_name, current_candidate.get("matched_name"))
@@ -1262,23 +1351,24 @@ def _extract_mapping_candidates(
                         if current_score > existing_score or has_coord_upgrade or has_better_snippet:
                             candidates[naver_place_id] = current_candidate
 
-                    if len(candidates) >= limit:
+                    if len(candidates) >= discovery_limit:
                         break
-                if len(candidates) >= limit:
+                if len(candidates) >= discovery_limit:
                     break
 
             logger.info(
-                "naver.mapping.search_iter query=%s url=%s candidates=%s",
+                "naver.mapping.search_iter query=%s url=%s candidates=%s query_new=%s",
                 query,
                 target_url,
                 len(candidates),
+                query_new_candidates,
             )
-            if candidates:
+            if len(candidates) >= discovery_limit:
                 break
-        if candidates:
+        if len(candidates) >= discovery_limit:
             break
 
-    return list(candidates.values())[:limit]
+    return list(candidates.values())[:discovery_limit]
 
 
 def resolve_naver_place_mapping(

@@ -61,6 +61,40 @@ class NaverPlaceCrawlerTests(unittest.TestCase):
         self.assertTrue(naver_place._is_noisy_candidate_name("운영 종료10:00에 운영 시작"))
         self.assertFalse(naver_place._is_noisy_candidate_name("무늬와 공간갤러리"))
 
+    def test_mapping_queries_prioritize_address_variants(self):
+        queries = naver_place._build_mapping_queries(
+            "유어아트",
+            {"road_address_name": "대전 서구 한밭대로592번길 11 2층 201호"},
+        )
+
+        self.assertTrue(queries)
+        self.assertEqual(queries[0], "대전 서구 한밭대로592번길 11 2층 201호")
+        self.assertIn("대전 서구 한밭대로592번길 11", queries)
+        self.assertIn("대전 서구 유어아트", queries)
+        self.assertIn("유어아트", queries)
+
+    def test_extract_route_coord_lookup_from_nso_path_links(self):
+        href = (
+            "/search.naver?where=m&query=%EB%B9%A0%EB%A5%B8%EA%B8%B8%EC%B0%BE%EA%B8%B0"
+            "&nso_path=type%5Eplace%3Bname%5E%EC%9C%A0%EC%96%B4%EC%95%84%ED%8A%B8"
+            "%3Bcode%5E1593950399%3Blongitude%5E127.3646769%3Blatitude%5E36.3574028"
+        )
+        anchor_valid = MagicMock()
+        anchor_valid.get_attribute.side_effect = lambda attr: href if attr == "href" else None
+        anchor_invalid = MagicMock()
+        anchor_invalid.get_attribute.side_effect = lambda attr: "/search.naver?where=m" if attr == "href" else None
+
+        locator = MagicMock()
+        locator.count.return_value = 2
+        locator.nth.side_effect = lambda index: [anchor_valid, anchor_invalid][index]
+
+        page = MagicMock()
+        page.url = "https://m.search.naver.com/search.naver"
+        page.locator.return_value = locator
+
+        lookup = naver_place._extract_route_coord_lookup(page)
+        self.assertEqual(lookup["1593950399"], (127.3646769, 36.3574028))
+
     def test_mapping_score_selection_prefers_better_combined_score(self):
         candidates = [
             {
@@ -86,6 +120,35 @@ class NaverPlaceCrawlerTests(unittest.TestCase):
 
         self.assertIsNotNone(best)
         self.assertEqual(best["naver_place_id"], "222")
+        self.assertEqual(len(scored), 2)
+
+    def test_mapping_score_prefers_nearby_candidate_even_when_name_differs(self):
+        candidates = [
+            {
+                "naver_place_id": "111",
+                "matched_name": "유어예술작업실",
+                "x": 127.3646769,
+                "y": 36.3574028,
+            },
+            {
+                "naver_place_id": "222",
+                "matched_name": "유어아트",
+                "x": 126.9000,
+                "y": 37.1000,
+            },
+        ]
+
+        best, scored = naver_place._select_best_mapping_candidate(
+            place_name="유어아트",
+            candidates=candidates,
+            kakao_x=127.3646773,
+            kakao_y=36.3574249,
+            kakao_address="대전 서구 한밭대로592번길 11",
+        )
+
+        self.assertIsNotNone(best)
+        self.assertEqual(best["naver_place_id"], "111")
+        self.assertGreaterEqual(best["confidence"], naver_place.MAP_MIN_CONFIDENCE)
         self.assertEqual(len(scored), 2)
 
     def test_mapping_score_prefers_region_hint_when_distance_missing(self):

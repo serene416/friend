@@ -1,177 +1,212 @@
-# What are we doing today? (우리 오늘 뭐 해?)
+# 🎉 오늘 뭐할까? (What Are We Doing Today?)
 
-Friends' Activity Recommendation App specialized for group gatherings and trending spots.
+친구들의 **실시간 위치 + 현재 날씨 + 장소 데이터**를 조합해,  
+모두가 만나기 좋은 **중간 지점 놀거리**를 추천하는 모바일 앱입니다.
 
-## Project Structure
+> 📢 **발표 한 줄 요약**  
+> “친구들과 만날 때, *어디서* + *뭘 할지*를 한 번에 해결해주는 중간지점 추천 앱”
 
-- **`mobile/`**: React Native (Expo) Client Application.
-- **`backend/`**: FastAPI Backend Server (Gateway & Core Logic).
-- **`worker/`**: Celery + Playwright Worker for data gathering.
-- **`ai/`**: GPU-accelerated AI Service for trend analysis.
-- **`infra/`**: Infrastructure configurations.
-- **`docker-compose.yml`**: Infrastructure orchestration (Postgres, Redis, MongoDB, Services).
+---
 
-## Getting Started
+## 1) 🎯 기획 의도
 
-### Prerequisites
+### ❗ 문제 정의
+- 약속 잡을 때 항상 생기는 문제: **“어디서 만날지”**, **“뭘 할지”**를 동시에 정하기 어렵다.
+- 단순 거리 기준 추천은 실제 체감(날씨, 장소 품질, 이동 공평성)을 반영하지 못한다.
 
-- **Docker & Docker Compose**: For running backend services and databases.
-- **Node.js & npm/yarn**: For running the frontend client.
-- **Expo Go App**: To run the mobile app on a physical device.
+### 💡 해결 방향
+- 사용자와 친구들의 위치를 바탕으로 **중간 지점**을 계산한다.
+- 해당 지점 주변에서 활동성 키워드 기반으로 장소를 수집하고,
+- **거리/공평성 + 날씨 적합도 + 네이버 평점 신뢰도**를 합산해 우선순위를 정한다.
 
-### 1. Backend & Infrastructure (Docker)
+### 🏁 서비스 목표
+- 약속 결정 시간을 줄이고,
+- “누구에게도 과도하게 멀지 않은” 공정한 추천 경험을 제공한다.
 
-To start the databases, backend, worker, and AI service:
+---
 
+## 2) 🧭 서비스 한눈에 보기
+
+```mermaid
+flowchart LR
+    A[모바일 앱\n친구 선택 + 위치/날씨 수집] --> B[FastAPI 추천 API]
+    B --> C[Kakao Local API\n역/키워드 검색]
+    B --> D[(Redis / Memory Cache)]
+    B --> E[(PostgreSQL + PostGIS)]
+    B --> F[Celery Queue]
+    F --> G[Worker\nNaver 크롤링 + 정제]
+    G --> H[(MongoDB Raw Data)]
+    G --> E
+    I[AI Polling Service] --> E
+```
+
+---
+
+## 3) 🛠 기술 스택
+
+| 영역 | 기술 |
+|---|---|
+| 📱 Mobile | React Native, Expo, Expo Router, Zustand, AsyncStorage, WebView, BottomSheet |
+| ⚙️ Backend | FastAPI, SQLModel, SQLAlchemy Async, GeoAlchemy2, HTTPX, Celery |
+| 🗄 Data | PostgreSQL(PostGIS), Redis, MongoDB |
+| 🤖 Worker | Celery Worker, Playwright(Chromium), Requests, PyMongo, Psycopg2 |
+| 🧠 AI Service | FastAPI + Async Polling, PyTorch/Transformers 기반 확장 구조 |
+| 🧱 Infra | Docker Compose, ngrok(모바일 실기기 연동), EAS Build |
+
+---
+
+## 4) 🚀 핵심 기능과 구현 과정
+
+### 4-1. 👥 친구 기반 중간 지점 추천
+1. 모바일에서 친구를 선택하고(최소 2인), 현재 위치/날씨를 함께 전송  
+   (`mobile/components/FriendSelector.tsx`)
+2. 백엔드가 참여자 평균 좌표를 계산하고, 주변 역/키워드 장소를 Kakao API로 수집  
+   (`backend/app/services/recommendation_service.py`)
+3. 중복 제거 + 부적합 장소 필터링 후 후보군 생성
+4. 캐시(Redis 또는 in-memory)로 동일 요청 재사용
+5. 최종 점수로 정렬해 추천 결과 반환
+
+### 4-2. 📊 랭킹 로직(날씨 가중치 반영)
+- 기본 날씨:  
+  `0.35*거리 + 0.30*평점 + 0.25*날씨 + 0.10*신뢰도`
+- 비/눈 날씨:  
+  `0.30*거리 + 0.25*평점 + 0.35*날씨 + 0.10*신뢰도`
+- 거리 계산은 하버사인 + 이동거리 분산(공평성)까지 반영
+- 평점은 단순 평균이 아닌 **베이지안 보정**으로 과소표본 왜곡 완화
+
+### 4-3. 🔄 비동기 Stage2 데이터 수집 파이프라인
+- 추천 응답은 빠르게 반환하고, 상세 데이터(리뷰/사진)는 백그라운드 수집
+- `IngestionJob` 생성 → Celery enqueue → Worker 처리
+- Worker는
+  - Kakao->Naver 매핑(이름/좌표/주소 신뢰도),
+  - Naver 리뷰/사진 크롤링(무한루프 방지 가드),
+  - 원본(Mongo) + 요약 피처(PostgreSQL) 저장을 수행
+- UI에서는 `photo_collection_status(PENDING/READY/EMPTY/FAILED)`로 상태를 명확히 표현
+
+### 4-4. 🧑‍🤝‍🧑 사용자/친구 기능
+- 카카오 로그인(WebView OAuth) 및 사용자 DB 동기화
+- 상태메시지 설정(24시간 만료), 현재 위치 동기화
+- 초대 링크 생성/수락(딥링크: `myapp://invite?token=...`)
+- 친구 목록/삭제/선택 기반 추천 연동
+
+### 4-5. 🌦️ 날씨 연동 UI
+- 위치 권한 기반으로 기상청 초단기 API 조회
+- 날씨 상태(맑음/흐림/비/눈)에 따라 홈 상단 카드 배경/문구/추천 맥락 동적 변경
+
+---
+
+## 5) 🎨 UI 구성
+
+### 🗺️ 화면 흐름
+`온보딩 → 로그인 → 홈(날씨/친구선택/추천) → 상세 → 관심목록/나의지도/마이페이지`
+
+### 📱 주요 화면
+| 화면 | 핵심 UI/UX 포인트 |
+|---|---|
+| 🌱 온보딩 | 3단 슬라이드로 서비스 가치(트렌드/중간지점/추천)를 빠르게 전달 |
+| 🏠 홈 | 날씨 카드 + 친구 선택 모달 + 카테고리 필터 + 추천 카드 리스트 |
+| 📍 활동 상세 | 사진 갤러리, 태그/거리/출처역, 링크 이동, 수집 실패 사유 노출 |
+| 🗺️ 나의 지도 | KakaoMap 마커 + BottomSheet 상세 카드 |
+| 👤 마이페이지 | 상태메시지 편집, 위치 동기화, 친구 초대/삭제, 설정 메뉴 |
+
+### 🖼️ 온보딩 이미지
+| 1 | 2 | 3 |
+|---|---|---|
+| ![onboarding-1](mobile/assets/images/onboarding1.png) | ![onboarding-2](mobile/assets/images/onboarding2.png) | ![onboarding-3](mobile/assets/images/onboarding3.png) |
+
+---
+
+## 6) 🗂 프로젝트 구조
+
+```text
+.
+├── mobile/      # Expo React Native 앱
+├── backend/     # FastAPI API 서버
+├── worker/      # Celery + Playwright 크롤링 워커
+├── ai/          # AI Polling 서비스(비동기 작업 처리 구조)
+├── docker-compose.yml
+└── README.md
+```
+
+---
+
+## 7) ⚙️ 실행 방법
+
+### 0. 📦 준비
+- Docker / Docker Compose
+- Node.js 18+
+- Expo Go(실기기 테스트 시)
+
+### 1. 🧱 백엔드 + 인프라 실행
 ```bash
-# Build and start all services
 docker-compose up --build
 ```
 
-- **Backend API**: `http://localhost:8000/docs`
-- **PostgreSQL**: `localhost:5440`
-- **Redis**: `localhost:6381`
-- **MongoDB**: `localhost:27018`
+- Backend: `http://localhost:8000/docs`
+- PostgreSQL: `localhost:5440`
+- Redis: `localhost:6381`
+- MongoDB: `localhost:27018`
 
-Kakao Local API setup for midpoint hotplace recommendations:
-- Set `KAKAO_REST_API_KEY=<your_kakao_rest_api_key>` in your backend environment (`.env` or Docker env).
-- Optional debug logs: set `MIDPOINT_LOG_FULL_KAKAO_RESULTS=true` to print full Kakao station/keyword documents and mapped category/activity info in backend logs.
-- Midpoint ranking uses a weighted score of participant distance/fairness, weather suitability, and Naver rating confidence.
-  - Send optional `weather_key` (`맑음`, `구름많음`, `흐림`, `비`, `눈`) in `POST /api/v1/recommend/midpoint-hotplaces`.
-  - Instagram trend signals are intentionally excluded for now.
-- Midpoint ingestion enqueue is enabled by default in `docker-compose.yml` via `MIDPOINT_ENABLE_INGESTION_ENQUEUE=${MIDPOINT_ENABLE_INGESTION_ENQUEUE:-true}`.
-  - Set `MIDPOINT_ENABLE_INGESTION_ENQUEUE=false` to disable async Stage 2 crawling.
-- Optional dedicated Celery broker URL: set `CELERY_BROKER_URL=redis://...` (if omitted, services fall back to `REDIS_URL`).
-- Optional CORS override: `CORS_ALLOWED_ORIGINS=http://localhost:19006,https://your-ngrok-domain.ngrok-free.app`
-- Restart backend after updating env vars.
-- If the key is missing, `POST /api/v1/recommend/midpoint-hotplaces` returns `503`.
-
-### 2. Frontend (React Native)
-
-To run the mobile application:
-
+### 2. 📱 모바일 실행
 ```bash
 cd mobile
-npm install  # Install dependencies (first time only)
+npm install
 npm run start:lan
 ```
 
-- Press `i` to open in iOS Simulator (Mac only).
-- Press `a` to open in Android Emulator.
-- Scan the QR code with the **Expo Go** app on your phone.
+`start:lan`은 현재 LAN IP를 찾아 `EXPO_PUBLIC_BACKEND_URL`을 자동 구성합니다.
 
-### 2.1 Expose Backend with ngrok (for device testing)
+### 3. 🔑 필수/권장 환경변수
 
-If you want to access the FastAPI server from a real device or outside your LAN, expose port `8000` with ngrok.
+#### ⚙️ Backend
+- `KAKAO_REST_API_KEY` (필수, 추천 API용)
+- `MIDPOINT_ENABLE_INGESTION_ENQUEUE` (기본 true)
+- `MIDPOINT_CACHE_TTL_SECONDS` (기본 900)
+- `INVITE_BASE_URL` (기본 `myapp://invite`)
+- `INVITE_TOKEN_TTL_DAYS` (기본 7)
 
-```bash
-# Install (macOS)
-brew install ngrok/ngrok/ngrok
+#### 📱 Mobile
+- `EXPO_PUBLIC_BACKEND_URL`
+- `EXPO_PUBLIC_KAKAO_MAP_JS_KEY`
+- `EXPO_PUBLIC_KMA_BASE_URL`
+- `EXPO_PUBLIC_KMA_SERVICE_KEY_ENCODED`
 
-# Authenticate once (get your token from ngrok dashboard)
-ngrok config add-authtoken <YOUR_NGROK_TOKEN>
+---
 
-# Start tunnel (replace with your reserved domain if you have one)
-ngrok http --domain=playwithme.ngrok.app 8000
-```
+## 8) 🔌 주요 API
 
-Then run the mobile app using the ngrok URL:
+| Method | Endpoint | 설명 |
+|---|---|---|
+| `POST` | `/api/v1/auth/kakao` | 카카오 로그인/회원 동기화 |
+| `GET` | `/api/v1/friends` | 친구 목록 조회 |
+| `POST` | `/api/v1/friends/invite` | 초대 링크 생성 |
+| `POST` | `/api/v1/friends/invite/accept` | 초대 수락 |
+| `POST` | `/api/v1/users/location` | 사용자 현재 위치 업데이트 |
+| `POST` | `/api/v1/users/status-message` | 상태메시지 업데이트 |
+| `POST` | `/api/v1/recommend/midpoint-hotplaces` | 중간지점 기반 핫플 추천 |
+| `POST` | `/api/v1/internal/ingestion/jobs` | 내부 수집 Job 생성 |
+| `GET` | `/api/v1/internal/ingestion/jobs/{job_id}` | 수집 Job 상태 조회 |
 
-```bash
-cd mobile
-EXPO_PUBLIC_BACKEND_URL=https://playwithme.ngrok.app npx expo start
-```
+---
 
-Notes:
-- If you don't set `EXPO_PUBLIC_BACKEND_URL`, the app first tries to infer your current LAN IP from Expo and builds `http://<your-ip>:8000`.
-- For real devices, avoid `EXPO_PUBLIC_BACKEND_URL=http://localhost:8000` in `.env` (it points to the phone itself).
-- If ngrok shows a different URL (no reserved domain), use that URL instead.
-
-### 2.3 Invite Links (Friend Invite)
-
-Backend environment variables:
-- `INVITE_BASE_URL` (default: `myapp://invite`)  
-  Base URL used to construct invite links. It should point to the invite deep link route and will have `?token=...` appended.
-- `INVITE_TOKEN_TTL_DAYS` (default: `7`)  
-  Invite expiration window in days.
-
-Mobile environment variables:
-- `EXPO_PUBLIC_BACKEND_URL`  
-  API base URL for invite creation/acceptance (same as login).
-
-### 2.2 ngrok automation (reserved domain)
-
-This repo includes a fixed ngrok config and a helper script.
+## 9) ✅ 테스트
 
 ```bash
-# Start ngrok using repo config
-./scripts/ngrok-start.sh
+# backend
+cd backend
+python -m unittest tests/test_recommendation_service.py tests/test_ingestion_service.py
+
+# worker
+cd ../worker
+python -m unittest tests/test_naver_place_crawler.py
 ```
 
-The config file is:
-- `ngrok.yml` (domain: `playwithme.ngrok.app`, port: `8000`)
+---
 
-If you need to change the domain, edit `ngrok.yml`.
+## 10) 🔮 현재 범위와 다음 단계
 
-If you see `ERR_NGROK_4018`, you haven't installed your authtoken on this machine yet:
-
-```bash
-ngrok config add-authtoken <YOUR_NGROK_TOKEN>
-```
-
-The script will merge your default ngrok config (where the authtoken is saved) with `ngrok.yml`.
-
-## Security Note (GPU Server)
-
-The AI Service is configured to run in a secure environment with limited ports (22, 80). It uses a **Polling** mechanism:
-- It connects to the internal PostgreSQL DB.
-- Polls the `aitask` table for `PENDING` tasks using `SELECT ... FOR UPDATE SKIP LOCKED`.
-- This ensures no direct external access to the GPU worker is required.
-
-## Internal Ingestion API (Stage 2)
-
-The backend now exposes internal ingestion endpoints:
-- `POST /api/v1/internal/ingestion/jobs`  
-  Creates a new ingestion job from an explicit hotplace list and enqueues the Celery task.
-- `GET /api/v1/internal/ingestion/jobs/{job_id}`  
-  Returns current ingestion job status and item counters.
-
-Crawler adapters:
-- `worker/crawlers/naver_place.py`: Playwright-based Naver Place review/photo crawler with Kakao->Naver mapping.
-- `worker/crawlers/instagram.py`: deterministic placeholder trend adapter.
-
-### Naver crawler environment variables
-
-You can tune crawler safety/behavior with:
-- `NAVER_CRAWLER_HEADLESS` (default: `true`)
-- `NAVER_CRAWLER_TIMEOUT_MS` (default: `12000`)
-- `NAVER_REVIEW_MAX_CLICKS` (default: `20`)
-- `NAVER_PHOTO_MAX_SCROLLS` (default: `30`)
-- `NAVER_NO_GROWTH_LIMIT` (default: `3`)
-- `NAVER_REQUEST_DELAY_MS` (default: `350`)
-- `NAVER_CRAWLER_USER_AGENT` (optional, default: unset)
-- `KAKAO_REST_API_KEY` (recommended for higher Kakao->Naver mapping accuracy)
-- `NAVER_MAPPING_CANDIDATE_LIMIT` (default: `3`)
-- `NAVER_KAKAO_LOOKUP_RADIUS_M` (default: `1200`)
-- `NAVER_KAKAO_LOOKUP_SIZE` (default: `5`)
-- `NAVER_KAKAO_LOOKUP_TIMEOUT_SEC` (default: `1.8`)
-- `MIDPOINT_INGESTION_MIN_RECRAWL_MINUTES` (default: `180`, skips re-enqueue for places ingested recently)
-- `INGESTION_REVIEW_SAMPLE_LIMIT` (default: `50`, max stored in `feature_payload.latest_review_sample`)
-- `INGESTION_PHOTO_SAMPLE_LIMIT` (default: `50`, max stored in `feature_payload.latest_photo_sample`)
-
-### Stage 2 crawler safety notes
-
-- Naver crawling remains background-only via Celery (`tasks.ingest_job`) and does not block midpoint API responses.
-- Kakao->Naver mapping is attempted first for each item using place name and optional coordinates.
-- If mapping fails or no crawlable Naver target is found, the item is marked `SKIPPED` (not `FAILED`) and ingestion continues.
-- Review/photo loops are bounded (`MAX_CLICKS`, `MAX_SCROLLS`, no-growth limits) to prevent infinite loops.
-- Selectors are fallback-based and actions use bounded retries + jittered delays for transient page failures.
-- The crawler is best-effort; DOM changes, bot defenses, or geo/access restrictions can reduce collected counts.
-- Midpoint hotplace responses include `photo_collection_status` (`PENDING`, `READY`, `EMPTY`, `FAILED`) and `photo_collection_reason` for UI-level empty/failed state handling.
-
-## Tech Stack
-
-- **Frontend**: React Native, Expo Router, Zustand
-- **Backend**: FastAPI, SQLModel, AsyncPG
-- **Database**: PostgreSQL (PostGIS), MongoDB, Redis
-- **Infra**: Docker, Nginx (planned)
+- 현재 Instagram 트렌드 지표는 **deterministic placeholder**로 동작
+- 향후 계획
+  1. 실제 트렌드 수집 소스 연동
+  2. 추천 설명(why this place) 강화
+  3. 추천 결과 A/B 실험 및 개인화 모델 고도화
