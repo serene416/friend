@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from uuid import UUID
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 
 class RecommendationRequest(BaseModel):
@@ -100,6 +100,8 @@ class MidpointHotplace(BaseModel):
     photo_urls: List[str] = Field(default_factory=list)
     naver_rating: Optional[float] = None
     naver_rating_count: Optional[int] = None
+    photo_collection_status: Literal["PENDING", "READY", "EMPTY", "FAILED"] = "PENDING"
+    photo_collection_reason: Optional[str] = None
 
 
 class MidpointHotplaceMeta(BaseModel):

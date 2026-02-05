@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import os
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -141,6 +142,26 @@ class RecommendationServiceTests(unittest.TestCase):
         )
         self.assertEqual(rating, 4.37)
         self.assertEqual(rating_count, 1289)
+
+    def test_extract_photo_collection_status_marks_failed_on_mapping_reason(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        status_value, reason = service._extract_photo_collection_status_from_feature_payload(
+            {"naver_mapping": {"reason": "no_candidates"}},
+            has_photo=False,
+            last_ingested_at=datetime.utcnow(),
+        )
+        self.assertEqual(status_value, "FAILED")
+        self.assertEqual(reason, "no_candidates")
+
+    def test_extract_photo_collection_status_marks_empty_when_crawled_without_photos(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        status_value, reason = service._extract_photo_collection_status_from_feature_payload(
+            {},
+            has_photo=False,
+            last_ingested_at=datetime.utcnow(),
+        )
+        self.assertEqual(status_value, "EMPTY")
+        self.assertIsNone(reason)
 
     def test_midpoint_hotplaces_fails_entire_request_on_single_keyword_error(self):
         with patch.dict(

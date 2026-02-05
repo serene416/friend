@@ -33,6 +33,8 @@ export interface MidpointHotplace {
   photo_urls?: string[];
   naver_rating?: number | null;
   naver_rating_count?: number | null;
+  photo_collection_status?: 'PENDING' | 'READY' | 'EMPTY' | 'FAILED';
+  photo_collection_reason?: string | null;
 }
 
 export interface MidpointHotplaceResponse {

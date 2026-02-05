@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta
 import hashlib
 import json
 import logging
@@ -119,6 +120,15 @@ KEYWORD_TO_PLAY_CATEGORY: dict[str, str] = {
 
 FIXED_STATION_LIMIT = 1
 FIXED_PAGES = 1
+PHOTO_COLLECTION_FAILURE_REASONS = {
+    "missing_place_name",
+    "no_candidates",
+    "low_confidence",
+    "search_error",
+    "missing_naver_place_id",
+    "crawler_error",
+    "naver_target_unavailable",
+}
 
 
 class RecommendationService:
@@ -140,6 +150,9 @@ class RecommendationService:
         )
         self.enable_ingestion_enqueue = self._get_bool_env(
             "MIDPOINT_ENABLE_INGESTION_ENQUEUE", default=False
+        )
+        self.ingestion_min_recrawl_minutes = self._get_int_env(
+            "MIDPOINT_INGESTION_MIN_RECRAWL_MINUTES", default=180, minimum=0
         )
 
         self._redis_client: Redis | None = None
@@ -263,6 +276,47 @@ class RecommendationService:
         rating_count = self._to_optional_positive_int(raw_summary.get("rating_count"))
         return average_rating, rating_count
 
+    def _extract_photo_collection_status_from_feature_payload(
+        self,
+        feature_payload: object,
+        *,
+        has_photo: bool,
+        last_ingested_at: datetime | None,
+    ) -> tuple[str, str | None]:
+        if has_photo:
+            return "READY", None
+
+        if not isinstance(feature_payload, dict):
+            return ("EMPTY", None) if last_ingested_at else ("PENDING", None)
+
+        crawl_payload = feature_payload.get("naver_crawl")
+        mapping_payload = feature_payload.get("naver_mapping")
+        if not isinstance(crawl_payload, dict):
+            crawl_payload = {}
+        if not isinstance(mapping_payload, dict):
+            mapping_payload = {}
+
+        crawl_status = str(crawl_payload.get("status") or "").strip().upper()
+        reason = (
+            str(crawl_payload.get("skip_reason") or mapping_payload.get("reason") or "")
+            .strip()
+            .lower()
+            or None
+        )
+        warnings = crawl_payload.get("warnings")
+        if not isinstance(warnings, list):
+            warnings = []
+
+        if crawl_status in {"FAILED", "SKIPPED"}:
+            return "FAILED", reason or "crawl_skipped"
+        if reason in PHOTO_COLLECTION_FAILURE_REASONS:
+            return "FAILED", reason
+        if any("error" in str(warning).lower() for warning in warnings):
+            return "FAILED", reason or "crawler_partial_error"
+        if last_ingested_at:
+            return "EMPTY", None
+        return "PENDING", None
+
     async def _fetch_hotplace_feature_map(
         self,
         session: AsyncSession | None,
@@ -292,12 +346,21 @@ class RecommendationService:
             naver_rating, naver_rating_count = self._extract_rating_summary_from_feature_payload(
                 row.feature_payload
             )
-            if photo_urls or naver_rating is not None or naver_rating_count is not None:
-                feature_map[row.kakao_place_id] = {
-                    "photo_urls": photo_urls,
-                    "naver_rating": naver_rating,
-                    "naver_rating_count": naver_rating_count,
-                }
+            photo_collection_status, photo_collection_reason = (
+                self._extract_photo_collection_status_from_feature_payload(
+                    row.feature_payload,
+                    has_photo=bool(photo_urls),
+                    last_ingested_at=row.last_ingested_at,
+                )
+            )
+            feature_map[row.kakao_place_id] = {
+                "photo_urls": photo_urls,
+                "naver_rating": naver_rating,
+                "naver_rating_count": naver_rating_count,
+                "photo_collection_status": photo_collection_status,
+                "photo_collection_reason": photo_collection_reason,
+                "last_ingested_at": row.last_ingested_at,
+            }
         return feature_map
 
     async def _attach_hotplace_features(
@@ -323,6 +386,13 @@ class RecommendationService:
             representative = photo_urls[0] if photo_urls else hotplace.representative_image_url
             naver_rating = self._to_optional_rating(feature.get("naver_rating"))
             naver_rating_count = self._to_optional_positive_int(feature.get("naver_rating_count"))
+            photo_collection_status = str(feature.get("photo_collection_status") or "").upper()
+            if photo_collection_status not in {"PENDING", "READY", "EMPTY", "FAILED"}:
+                photo_collection_status = hotplace.photo_collection_status
+            photo_collection_reason = feature.get("photo_collection_reason")
+            if not isinstance(photo_collection_reason, str):
+                photo_collection_reason = hotplace.photo_collection_reason
+
             enriched.append(
                 hotplace.model_copy(
                     update={
@@ -336,6 +406,8 @@ class RecommendationService:
                             if naver_rating_count is not None
                             else hotplace.naver_rating_count
                         ),
+                        "photo_collection_status": photo_collection_status,
+                        "photo_collection_reason": photo_collection_reason,
                     }
                 )
             )
@@ -435,7 +507,7 @@ class RecommendationService:
 
     def _build_cache_key(self, request: MidpointHotplaceRequest) -> str:
         participant_locations = sorted(
-            (round(participant.lat, 6), round(participant.lng, 6))
+            (round(participant.lat, 4), round(participant.lng, 4))
             for participant in request.participants
         )
         payload = {
@@ -563,6 +635,7 @@ class RecommendationService:
         request: MidpointHotplaceRequest,
         midpoint: Midpoint,
         hotplaces: list[MidpointHotplace],
+        session: AsyncSession | None = None,
     ) -> None:
         if not self.enable_ingestion_enqueue:
             return
@@ -570,9 +643,43 @@ class RecommendationService:
             logger.info("Skipping ingestion enqueue because there are no hotplaces")
             return
 
+        hotplaces_to_enqueue = hotplaces
+        if session is not None and self.ingestion_min_recrawl_minutes > 0:
+            feature_map = await self._fetch_hotplace_feature_map(
+                session,
+                [hotplace.kakao_place_id for hotplace in hotplaces],
+            )
+            threshold = timedelta(minutes=self.ingestion_min_recrawl_minutes)
+            now = datetime.utcnow()
+            filtered_hotplaces: list[MidpointHotplace] = []
+            skipped_recently_ingested = 0
+
+            for hotplace in hotplaces:
+                feature = feature_map.get(hotplace.kakao_place_id, {})
+                last_ingested_at = feature.get("last_ingested_at")
+                if (
+                    isinstance(last_ingested_at, datetime)
+                    and now - last_ingested_at < threshold
+                ):
+                    skipped_recently_ingested += 1
+                    continue
+                filtered_hotplaces.append(hotplace)
+
+            if skipped_recently_ingested:
+                logger.info(
+                    "Skipping %s hotplaces for ingestion due to recrawl cooldown (%s minutes)",
+                    skipped_recently_ingested,
+                    self.ingestion_min_recrawl_minutes,
+                )
+            hotplaces_to_enqueue = filtered_hotplaces
+
+        if not hotplaces_to_enqueue:
+            logger.info("Skipping ingestion enqueue because all hotplaces are within recrawl cooldown")
+            return
+
         try:
             job_id = await create_ingestion_job_from_hotplaces(
-                hotplaces=[hotplace.model_dump() for hotplace in hotplaces],
+                hotplaces=[hotplace.model_dump() for hotplace in hotplaces_to_enqueue],
                 source="midpoint-hotplaces",
                 request_context={
                     "participant_count": len(request.participants),
@@ -581,6 +688,8 @@ class RecommendationService:
                     "size": request.size,
                     "pages": request.pages,
                     "midpoint": {"lat": midpoint.lat, "lng": midpoint.lng},
+                    "requested_hotplace_count": len(hotplaces),
+                    "enqueued_hotplace_count": len(hotplaces_to_enqueue),
                 },
             )
             logger.info("Enqueued ingestion job from midpoint-hotplaces: job_id=%s", job_id)
@@ -899,5 +1008,6 @@ class RecommendationService:
             request=request,
             midpoint=midpoint,
             hotplaces=hotplaces,
+            session=session,
         )
         return response

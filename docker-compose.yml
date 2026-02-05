@@ -65,6 +65,7 @@ services:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
       - KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
       - MIDPOINT_ENABLE_INGESTION_ENQUEUE=${MIDPOINT_ENABLE_INGESTION_ENQUEUE:-true}
+      - MIDPOINT_INGESTION_MIN_RECRAWL_MINUTES=${MIDPOINT_INGESTION_MIN_RECRAWL_MINUTES:-180}
     depends_on:
       db:
         condition: service_healthy
@@ -88,6 +89,11 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
+      - NAVER_REVIEW_MAX_CLICKS=${NAVER_REVIEW_MAX_CLICKS:-10}
+      - NAVER_PHOTO_MAX_SCROLLS=${NAVER_PHOTO_MAX_SCROLLS:-16}
+      - NAVER_NO_GROWTH_LIMIT=${NAVER_NO_GROWTH_LIMIT:-2}
+      - NAVER_REQUEST_DELAY_MS=${NAVER_REQUEST_DELAY_MS:-220}
     depends_on:
       redis:
         condition: service_healthy

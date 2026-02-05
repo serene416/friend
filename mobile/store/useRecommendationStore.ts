@@ -45,6 +45,27 @@ const toOptionalPositiveInt = (value: unknown): number | null => {
   return normalized > 0 ? normalized : null;
 };
 
+const normalizePhotoCollectionStatus = (
+  value: unknown
+): 'PENDING' | 'READY' | 'EMPTY' | 'FAILED' => {
+  if (typeof value !== 'string') {
+    return 'PENDING';
+  }
+  const normalized = value.toUpperCase();
+  if (normalized === 'READY' || normalized === 'EMPTY' || normalized === 'FAILED') {
+    return normalized;
+  }
+  return 'PENDING';
+};
+
+const normalizePhotoCollectionReason = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 const normalizeCoordinate = (value?: Coordinate | null): Coordinate | null => {
   if (!value || !isFiniteNumber(value.lat) || !isFiniteNumber(value.lng)) {
     return null;
@@ -80,6 +101,7 @@ const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => {
       hotplace.representative_image_url.startsWith('http')
       ? hotplace.representative_image_url
       : photoUrls[0] ?? null;
+  const photoCollectionStatus = normalizePhotoCollectionStatus(hotplace.photo_collection_status);
 
   return {
     ...hotplace,
@@ -90,6 +112,8 @@ const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => {
     representative_image_url: representative,
     naver_rating: toOptionalRating(hotplace.naver_rating),
     naver_rating_count: toOptionalPositiveInt(hotplace.naver_rating_count),
+    photo_collection_status: photoUrls.length > 0 ? 'READY' : photoCollectionStatus,
+    photo_collection_reason: normalizePhotoCollectionReason(hotplace.photo_collection_reason),
   };
 };
 

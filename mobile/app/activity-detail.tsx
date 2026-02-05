@@ -39,6 +39,46 @@ const parseIdParam = (value: string | string[] | undefined) => {
   }
 };
 
+const PHOTO_COLLECTION_REASON_LABELS: Record<string, string> = {
+  no_candidates: '네이버 장소를 찾지 못했어요',
+  low_confidence: '장소 매칭 정확도가 낮아요',
+  search_error: '검색 중 오류가 발생했어요',
+  missing_place_name: '장소 이름 정보가 부족해요',
+  missing_naver_place_id: '네이버 장소 ID를 찾지 못했어요',
+  crawler_error: '크롤러 실행 중 오류가 발생했어요',
+  naver_target_unavailable: '대상 페이지 접근이 불가능해요',
+  crawl_skipped: '크롤러가 대상을 건너뛰었어요',
+  crawler_partial_error: '수집 중 일부 단계에서 오류가 있었어요',
+};
+
+const getPhotoPlaceholderMeta = (status?: string | null, reason?: string | null) => {
+  if (status === 'FAILED') {
+    return {
+      icon: 'alert-circle-outline' as const,
+      iconColor: '#DC2626',
+      title: '사진 수집 실패',
+      subtitle: reason ? PHOTO_COLLECTION_REASON_LABELS[reason] ?? `실패 사유: ${reason}` : null,
+      failed: true,
+    };
+  }
+  if (status === 'EMPTY') {
+    return {
+      icon: 'image-outline' as const,
+      iconColor: '#9DA3AF',
+      title: '수집된 장소 사진이 없어요',
+      subtitle: null,
+      failed: false,
+    };
+  }
+  return {
+    icon: 'clock-outline' as const,
+    iconColor: '#9DA3AF',
+    title: '사진 수집 대기 중',
+    subtitle: null,
+    failed: false,
+  };
+};
+
 export default function ActivityDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
@@ -95,6 +135,10 @@ export default function ActivityDetailScreen() {
     : fallbackHeroImage
       ? [fallbackHeroImage]
       : [];
+  const photoPlaceholder = getPhotoPlaceholderMeta(
+    hotplace?.photo_collection_status,
+    hotplace?.photo_collection_reason
+  );
 
   const heroImageWidth = Math.max(windowWidth - 0.1, 1);
 
@@ -222,8 +266,25 @@ export default function ActivityDetailScreen() {
             </>
           ) : (
             <View style={styles.heroImagePlaceholder}>
-              <MaterialCommunityIcons name='image-off-outline' size={36} color='#9DA3AF' />
-              <Text style={styles.heroImagePlaceholderText}>수집된 장소 사진이 아직 없어요</Text>
+              <MaterialCommunityIcons
+                name={photoPlaceholder.icon}
+                size={36}
+                color={photoPlaceholder.iconColor}
+              />
+              <Text style={[
+                styles.heroImagePlaceholderText,
+                photoPlaceholder.failed && styles.heroImagePlaceholderTextFailed,
+              ]}>
+                {photoPlaceholder.title}
+              </Text>
+              {photoPlaceholder.subtitle ? (
+                <Text style={[
+                  styles.heroImagePlaceholderSubText,
+                  photoPlaceholder.failed && styles.heroImagePlaceholderSubTextFailed,
+                ]}>
+                  {photoPlaceholder.subtitle}
+                </Text>
+              ) : null}
             </View>
           )}
         </View>
@@ -399,6 +460,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     fontFamily: 'Pretendard-Medium',
+  },
+  heroImagePlaceholderTextFailed: {
+    color: '#B91C1C',
+    fontFamily: 'Pretendard-Bold',
+  },
+  heroImagePlaceholderSubText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'Pretendard-Medium',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  heroImagePlaceholderSubTextFailed: {
+    color: '#991B1B',
   },
   paginationContainer: {
     position: 'absolute',

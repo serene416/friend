@@ -205,15 +205,44 @@ def _upsert_place_ingestion_feature(
     trend_payload: dict[str, Any],
     naver_mapping_payload: dict[str, Any] | None = None,
     naver_rating_summary: dict[str, Any] | None = None,
+    naver_crawl_payload: dict[str, Any] | None = None,
 ) -> None:
     review_sample = reviews[:FEATURE_REVIEW_SAMPLE_LIMIT]
     photo_sample = photos[:FEATURE_PHOTO_SAMPLE_LIMIT]
+    effective_photo_count = len(photos)
+    if effective_photo_count == 0:
+        cursor.execute(
+            """
+            SELECT latest_photo_count, feature_payload
+            FROM place_ingestion_feature
+            WHERE kakao_place_id = %s
+            """,
+            (item["kakao_place_id"],),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            existing_photo_count = int(existing[0] or 0)
+            existing_payload = existing[1] if isinstance(existing[1], dict) else {}
+            existing_photo_sample = (
+                existing_payload.get("latest_photo_sample")
+                if isinstance(existing_payload, dict)
+                else []
+            )
+            if (
+                existing_photo_count > 0
+                and isinstance(existing_photo_sample, list)
+                and existing_photo_sample
+            ):
+                photo_sample = existing_photo_sample[:FEATURE_PHOTO_SAMPLE_LIMIT]
+                effective_photo_count = existing_photo_count
+
     feature_payload = {
         "latest_review_sample": review_sample,
         "latest_photo_sample": photo_sample,
         "instagram_raw": trend_payload,
         "naver_mapping": naver_mapping_payload or {},
         "naver_rating_summary": naver_rating_summary or {},
+        "naver_crawl": naver_crawl_payload or {},
         "source_keyword": item.get("source_keyword"),
         "source_station": item.get("source_station"),
     }
@@ -255,7 +284,7 @@ def _upsert_place_ingestion_feature(
             str(uuid4()),
             item["kakao_place_id"],
             len(reviews),
-            len(photos),
+            effective_photo_count,
             float(trend_payload.get("post_freq_7d", 0.0)),
             float(trend_payload.get("post_freq_30d", 0.0)),
             Json(feature_payload),
@@ -318,6 +347,15 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
                 photos = naver_bundle.get("photos", [])
                 naver_mapping = naver_bundle.get("mapping", {}) or {}
                 naver_rating_summary = naver_bundle.get("rating_summary", {}) or {}
+                naver_crawl_payload = {
+                    "status": naver_bundle.get("status"),
+                    "skip_reason": naver_bundle.get("skip_reason"),
+                    "warnings": (
+                        naver_bundle.get("warnings")
+                        if isinstance(naver_bundle.get("warnings"), list)
+                        else []
+                    ),
+                }
                 trend_payload = crawl_instagram_trend(item["kakao_place_id"], item.get("place_name"))
 
                 _write_raw_to_mongo(
@@ -339,6 +377,7 @@ def ingest_job(self, job_id: str) -> dict[str, Any]:
                             trend_payload=trend_payload,
                             naver_mapping_payload=naver_mapping,
                             naver_rating_summary=naver_rating_summary,
+                            naver_crawl_payload=naver_crawl_payload,
                         )
                         if naver_bundle.get("status") == "SKIPPED":
                             _set_item_skipped(

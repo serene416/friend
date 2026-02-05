@@ -7,7 +7,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from worker.crawlers import naver_place
+try:
+    from worker.crawlers import naver_place
+except ModuleNotFoundError:  # pragma: no cover - container test fallback
+    from crawlers import naver_place
 
 
 class NaverPlaceCrawlerTests(unittest.TestCase):
@@ -83,6 +86,44 @@ class NaverPlaceCrawlerTests(unittest.TestCase):
 
         self.assertIsNotNone(best)
         self.assertEqual(best["naver_place_id"], "222")
+        self.assertEqual(len(scored), 2)
+
+    def test_mapping_score_prefers_region_hint_when_distance_missing(self):
+        candidates = [
+            {
+                "naver_place_id": "111",
+                "matched_name": "아키디자인",
+                "snippet": "인천 남동구 구월동 인테리어 소품샵",
+            },
+            {
+                "naver_place_id": "222",
+                "matched_name": "아키디자인",
+                "snippet": "대전 서구 월평동 인테리어 소품샵",
+            },
+        ]
+
+        best, scored = naver_place._select_best_mapping_candidate(
+            place_name="아키디자인",
+            candidates=candidates,
+            kakao_address="대전 서구 계룡로264번길 38-5",
+        )
+
+        self.assertIsNotNone(best)
+        self.assertEqual(best["naver_place_id"], "222")
+        self.assertEqual(len(scored), 2)
+
+    def test_mapping_returns_none_for_ambiguous_candidates(self):
+        candidates = [
+            {"naver_place_id": "111", "matched_name": "아키디자인"},
+            {"naver_place_id": "222", "matched_name": "아키디자인"},
+        ]
+
+        best, scored = naver_place._select_best_mapping_candidate(
+            place_name="아키디자인",
+            candidates=candidates,
+        )
+
+        self.assertIsNone(best)
         self.assertEqual(len(scored), 2)
 
     def test_no_growth_guard_stops_after_limit(self):

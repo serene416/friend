@@ -147,6 +147,12 @@ You can tune crawler safety/behavior with:
 - `NAVER_NO_GROWTH_LIMIT` (default: `3`)
 - `NAVER_REQUEST_DELAY_MS` (default: `350`)
 - `NAVER_CRAWLER_USER_AGENT` (optional, default: unset)
+- `KAKAO_REST_API_KEY` (recommended for higher Kakao->Naver mapping accuracy)
+- `NAVER_MAPPING_CANDIDATE_LIMIT` (default: `3`)
+- `NAVER_KAKAO_LOOKUP_RADIUS_M` (default: `1200`)
+- `NAVER_KAKAO_LOOKUP_SIZE` (default: `5`)
+- `NAVER_KAKAO_LOOKUP_TIMEOUT_SEC` (default: `1.8`)
+- `MIDPOINT_INGESTION_MIN_RECRAWL_MINUTES` (default: `180`, skips re-enqueue for places ingested recently)
 - `INGESTION_REVIEW_SAMPLE_LIMIT` (default: `50`, max stored in `feature_payload.latest_review_sample`)
 - `INGESTION_PHOTO_SAMPLE_LIMIT` (default: `50`, max stored in `feature_payload.latest_photo_sample`)
 
@@ -158,6 +164,7 @@ You can tune crawler safety/behavior with:
 - Review/photo loops are bounded (`MAX_CLICKS`, `MAX_SCROLLS`, no-growth limits) to prevent infinite loops.
 - Selectors are fallback-based and actions use bounded retries + jittered delays for transient page failures.
 - The crawler is best-effort; DOM changes, bot defenses, or geo/access restrictions can reduce collected counts.
+- Midpoint hotplace responses include `photo_collection_status` (`PENDING`, `READY`, `EMPTY`, `FAILED`) and `photo_collection_reason` for UI-level empty/failed state handling.
 
 ## Tech Stack
 

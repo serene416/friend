@@ -13,6 +13,8 @@ from math import asin, cos, radians, sin, sqrt
 from typing import Any, Callable
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 
+import requests
+
 try:
     from playwright.sync_api import (
         Browser,
@@ -31,6 +33,7 @@ logger = logging.getLogger("worker.naver_place")
 
 MAP_MIN_CONFIDENCE = 0.50
 MAX_RETRY_ATTEMPTS = 3
+KAKAO_KEYWORD_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
 
 MAPPING_URLS = [
     "https://m.search.naver.com/search.naver?where=m&sm=mtp_hty.top&query={query}",
@@ -173,6 +176,10 @@ class NaverCrawlerConfig:
     no_growth_limit: int
     request_delay_ms: int
     user_agent: str | None
+    mapping_candidate_limit: int
+    kakao_lookup_radius_m: int
+    kakao_lookup_size: int
+    kakao_lookup_timeout_sec: float
 
 
 @dataclass
@@ -223,6 +230,18 @@ def _get_int_env(name: str, default: int, minimum: int = 1) -> int:
     return max(minimum, parsed)
 
 
+def _get_float_env(name: str, default: float, minimum: float = 0.0) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        parsed = float(raw)
+    except ValueError:
+        logger.warning("Invalid float env %s=%s; using default=%s", name, raw, default)
+        return default
+    return max(minimum, parsed)
+
+
 def _load_config() -> NaverCrawlerConfig:
     return NaverCrawlerConfig(
         headless=_get_bool_env("NAVER_CRAWLER_HEADLESS", True),
@@ -232,6 +251,10 @@ def _load_config() -> NaverCrawlerConfig:
         no_growth_limit=_get_int_env("NAVER_NO_GROWTH_LIMIT", 3),
         request_delay_ms=_get_int_env("NAVER_REQUEST_DELAY_MS", 350, minimum=0),
         user_agent=(os.getenv("NAVER_CRAWLER_USER_AGENT") or "").strip() or None,
+        mapping_candidate_limit=_get_int_env("NAVER_MAPPING_CANDIDATE_LIMIT", 3),
+        kakao_lookup_radius_m=_get_int_env("NAVER_KAKAO_LOOKUP_RADIUS_M", 1200),
+        kakao_lookup_size=_get_int_env("NAVER_KAKAO_LOOKUP_SIZE", 5),
+        kakao_lookup_timeout_sec=_get_float_env("NAVER_KAKAO_LOOKUP_TIMEOUT_SEC", 1.8, minimum=0.2),
     )
 
 
@@ -431,6 +454,217 @@ def _distance_m(
     return _haversine_distance_m(kakao_y, kakao_x, candidate_y, candidate_x)
 
 
+def _extract_region_tokens(address: str | None, max_tokens: int = 3) -> list[str]:
+    if not address:
+        return []
+
+    tokens: list[str] = []
+    for raw_token in address.strip().split():
+        token = NON_WORD_PATTERN.sub("", raw_token.lower())
+        if len(token) < 2:
+            continue
+        if token.isdigit():
+            continue
+        tokens.append(token)
+        if len(tokens) >= max_tokens:
+            break
+    return tokens
+
+
+def _region_similarity(region_tokens: list[str], candidate_text: str | None) -> float:
+    if not region_tokens or not candidate_text:
+        return 0.0
+
+    normalized = _normalize_text(candidate_text)
+    if not normalized:
+        return 0.0
+    compact = normalized.replace(" ", "")
+
+    matched_count = sum(1 for token in region_tokens if token in compact)
+    return matched_count / len(region_tokens)
+
+
+def _pick_best_kakao_document(
+    kakao_place_id: str,
+    place_name: str,
+    documents: list[dict[str, Any]],
+    x: float | None,
+    y: float | None,
+) -> dict[str, Any] | None:
+    normalized_place_id = str(kakao_place_id).strip()
+    if normalized_place_id:
+        for doc in documents:
+            if str(doc.get("id") or "").strip() == normalized_place_id:
+                return doc
+
+    best_doc: dict[str, Any] | None = None
+    best_score = -1.0
+    for doc in documents:
+        doc_name = str(doc.get("place_name") or "").strip()
+        if not doc_name:
+            continue
+
+        name_score = _name_similarity(place_name, doc_name)
+        doc_x = _to_optional_float(doc.get("x"))
+        doc_y = _to_optional_float(doc.get("y"))
+        distance_m = _distance_m(x, y, doc_x, doc_y)
+
+        proximity_bonus = 0.0
+        if distance_m is not None:
+            # 0~2km 범위에서 최대 +0.35 가산.
+            proximity_bonus = max(0.0, 0.35 - min(distance_m, 2000.0) / 2000.0 * 0.35)
+
+        score = name_score + proximity_bonus
+        if score > best_score:
+            best_score = score
+            best_doc = doc
+
+    return best_doc
+
+
+def _fetch_kakao_place_context(
+    kakao_place_id: str,
+    place_name: str | None,
+    x: float | None,
+    y: float | None,
+    config: NaverCrawlerConfig,
+) -> dict[str, Any]:
+    base_context = {
+        "place_name": place_name,
+        "x": x,
+        "y": y,
+        "address_name": None,
+        "road_address_name": None,
+        "resolved": False,
+    }
+
+    normalized_name = (place_name or "").strip()
+    if not normalized_name:
+        return base_context
+
+    rest_api_key = (os.getenv("KAKAO_REST_API_KEY") or "").strip()
+    if not rest_api_key:
+        return base_context
+
+    params: dict[str, Any] = {
+        "query": normalized_name,
+        "size": config.kakao_lookup_size,
+    }
+    if x is not None and y is not None:
+        params.update(
+            {
+                "x": x,
+                "y": y,
+                "radius": config.kakao_lookup_radius_m,
+                "sort": "distance",
+            }
+        )
+
+    try:
+        response = requests.get(
+            KAKAO_KEYWORD_SEARCH_URL,
+            headers={"Authorization": f"KakaoAK {rest_api_key}"},
+            params=params,
+            timeout=(1.5, config.kakao_lookup_timeout_sec),
+        )
+    except requests.RequestException:
+        logger.warning(
+            "naver.mapping.kakao_lookup.error kakao_place_id=%s place_name=%s",
+            kakao_place_id,
+            normalized_name,
+            exc_info=True,
+        )
+        return base_context
+
+    if response.status_code != 200:
+        logger.info(
+            "naver.mapping.kakao_lookup.skipped kakao_place_id=%s status=%s",
+            kakao_place_id,
+            response.status_code,
+        )
+        return base_context
+
+    try:
+        documents = response.json().get("documents", [])
+    except Exception:
+        logger.warning(
+            "naver.mapping.kakao_lookup.parse_failed kakao_place_id=%s",
+            kakao_place_id,
+            exc_info=True,
+        )
+        return base_context
+
+    if not isinstance(documents, list) or not documents:
+        return base_context
+
+    best_doc = _pick_best_kakao_document(
+        kakao_place_id=kakao_place_id,
+        place_name=normalized_name,
+        documents=documents,
+        x=x,
+        y=y,
+    )
+    if not best_doc:
+        return base_context
+
+    resolved_name = str(best_doc.get("place_name") or normalized_name).strip() or normalized_name
+    resolved_x = _to_optional_float(best_doc.get("x"))
+    resolved_y = _to_optional_float(best_doc.get("y"))
+    if resolved_x is None:
+        resolved_x = x
+    if resolved_y is None:
+        resolved_y = y
+
+    resolved_context = {
+        "place_name": resolved_name,
+        "x": resolved_x,
+        "y": resolved_y,
+        "address_name": str(best_doc.get("address_name") or "").strip() or None,
+        "road_address_name": str(best_doc.get("road_address_name") or "").strip() or None,
+        "resolved": True,
+        "kakao_doc_id": str(best_doc.get("id") or "").strip() or None,
+    }
+    logger.info(
+        "naver.mapping.kakao_lookup.success kakao_place_id=%s kakao_doc_id=%s place_name=%s road_address=%s",
+        kakao_place_id,
+        resolved_context.get("kakao_doc_id"),
+        resolved_context.get("place_name"),
+        resolved_context.get("road_address_name"),
+    )
+    return resolved_context
+
+
+def _build_mapping_queries(place_name: str, kakao_context: dict[str, Any]) -> list[str]:
+    normalized_name = " ".join(place_name.split()).strip()
+    if not normalized_name:
+        return []
+
+    queries: list[str] = []
+    address_hint = (
+        str(kakao_context.get("road_address_name") or "").strip()
+        or str(kakao_context.get("address_name") or "").strip()
+    )
+    region_tokens = _extract_region_tokens(address_hint, max_tokens=3)
+    if region_tokens:
+        queries.append(f"{' '.join(region_tokens)} {normalized_name}".strip())
+        queries.append(f"{' '.join(region_tokens[:2])} {normalized_name}".strip())
+
+    queries.append(normalized_name)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for query in queries:
+        normalized_query = " ".join(query.split()).strip()
+        if not normalized_query:
+            continue
+        key = normalized_query.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized_query)
+    return deduped
+
+
 def _parse_place_id(href: str | None) -> str | None:
     if not href:
         return None
@@ -479,8 +713,10 @@ def _select_best_mapping_candidate(
     candidates: list[dict[str, Any]],
     kakao_x: float | None = None,
     kakao_y: float | None = None,
+    kakao_address: str | None = None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     scored_candidates: list[dict[str, Any]] = []
+    region_tokens = _extract_region_tokens(kakao_address)
 
     for candidate in candidates:
         naver_place_id = str(candidate.get("naver_place_id") or "").strip()
@@ -491,21 +727,46 @@ def _select_best_mapping_candidate(
         candidate_x = _to_optional_float(candidate.get("x"))
         candidate_y = _to_optional_float(candidate.get("y"))
         distance_m = _distance_m(kakao_x, kakao_y, candidate_x, candidate_y)
+        snippet = str(candidate.get("snippet") or "").strip()
+        region_score = _region_similarity(
+            region_tokens,
+            " ".join(filter(None, [matched_name, snippet, str(candidate.get("source_url") or "")])),
+        )
 
         name_score = _name_similarity(place_name, matched_name)
-        confidence = name_score
-        if distance_m is not None:
-            distance_penalty = min(distance_m / 3000.0, 0.55)
-            confidence = max(0.0, name_score - distance_penalty)
+
+        if distance_m is None:
+            distance_score = 0.0
+        elif distance_m <= 300:
+            distance_score = 1.0
+        elif distance_m <= 1000:
+            distance_score = 0.8
+        elif distance_m <= 3000:
+            distance_score = 0.5
+        elif distance_m <= 5000:
+            distance_score = 0.2
+        else:
+            distance_score = 0.0
+
+        confidence = (name_score * 0.62) + (region_score * 0.23) + (distance_score * 0.15)
+        if distance_m is not None and distance_m > 10000:
+            confidence -= 0.35
+        elif distance_m is not None and distance_m > 5000:
+            confidence -= 0.18
+        confidence = max(0.0, min(1.0, confidence))
 
         scored = {
             "naver_place_id": naver_place_id,
             "matched_name": matched_name,
             "confidence": round(confidence, 4),
             "distance_m": round(distance_m, 2) if distance_m is not None else None,
+            "name_score": round(name_score, 4),
+            "region_score": round(region_score, 4),
+            "distance_score": round(distance_score, 4),
             "x": candidate_x,
             "y": candidate_y,
             "source_url": candidate.get("source_url"),
+            "snippet": snippet or None,
         }
         scored_candidates.append(scored)
 
@@ -514,12 +775,33 @@ def _select_best_mapping_candidate(
 
     scored_candidates.sort(
         key=lambda row: (
-            row["confidence"],
-            -1 if row["distance_m"] is None else -row["distance_m"],
-        ),
-        reverse=True,
+            -row["confidence"],
+            -row["region_score"],
+            -row["name_score"],
+            row["distance_m"] if row["distance_m"] is not None else float("inf"),
+            row["naver_place_id"],
+        )
     )
-    return scored_candidates[0], scored_candidates
+
+    best_candidate = scored_candidates[0]
+    if len(scored_candidates) > 1:
+        second_candidate = scored_candidates[1]
+        confidence_gap = best_candidate["confidence"] - second_candidate["confidence"]
+        both_no_distance = (
+            best_candidate["distance_m"] is None and second_candidate["distance_m"] is None
+        )
+        weak_region_signal = max(best_candidate["region_score"], second_candidate["region_score"]) < 0.34
+        if confidence_gap < 0.08 and both_no_distance and weak_region_signal:
+            logger.info(
+                "naver.mapping.ambiguous place_name=%s top=%s second=%s gap=%.4f",
+                place_name,
+                best_candidate["naver_place_id"],
+                second_candidate["naver_place_id"],
+                confidence_gap,
+            )
+            return None, scored_candidates
+
+    return best_candidate, scored_candidates
 
 
 def _paced_wait(page: Page, config: NaverCrawlerConfig, multiplier: float = 1.0) -> None:
@@ -883,92 +1165,120 @@ def _extract_mapping_candidates(
     page: Page,
     place_name: str,
     config: NaverCrawlerConfig,
+    query_variants: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
-    query = place_name.strip()
+    limit = max(1, config.mapping_candidate_limit)
+    normalized_queries = query_variants or [place_name.strip()]
+    normalized_queries = [query for query in normalized_queries if query.strip()]
 
-    for template in MAPPING_URLS:
-        target_url = template.format(query=quote_plus(query))
-        if not _safe_goto(page, target_url, timeout_ms=config.timeout_ms):
-            continue
+    for query in normalized_queries:
+        for template in MAPPING_URLS:
+            target_url = template.format(query=quote_plus(query))
+            if not _safe_goto(page, target_url, timeout_ms=config.timeout_ms):
+                continue
 
-        _paced_wait(page, config, multiplier=0.8)
+            _paced_wait(page, config, multiplier=0.8)
 
-        for selector in (
-            "a[href*='m.place.naver.com/place/']",
-            "a[href*='pcmap.place.naver.com/restaurant/']",
-            "a[href*='entry/place/']",
-            "a[href*='/place/']",
-        ):
-            try:
-                locator = page.locator(selector)
-                count = min(locator.count(), 30)
-            except Exception:
-                count = 0
+            for selector in (
+                "a[href*='m.place.naver.com/place/']",
+                "a[href*='pcmap.place.naver.com/restaurant/']",
+                "a[href*='entry/place/']",
+                "a[href*='/place/']",
+            ):
+                try:
+                    locator = page.locator(selector)
+                    count = min(locator.count(), max(15, limit * 6))
+                except Exception:
+                    count = 0
 
-            for index in range(count):
-                anchor = locator.nth(index)
-                href = _extract_attr(anchor, ["href"])
-                if not href:
-                    continue
+                for index in range(count):
+                    anchor = locator.nth(index)
+                    href = _extract_attr(anchor, ["href"])
+                    if not href:
+                        continue
 
-                resolved_href = urljoin(page.url, href)
-                if "/place/list" in resolved_href:
-                    continue
-                if "/photo" in urlparse(resolved_href).path:
-                    continue
+                    resolved_href = urljoin(page.url, href)
+                    if "/place/list" in resolved_href:
+                        continue
+                    if "/photo" in urlparse(resolved_href).path:
+                        continue
 
-                naver_place_id = _parse_place_id(resolved_href)
-                if not naver_place_id:
-                    continue
+                    naver_place_id = _parse_place_id(resolved_href)
+                    if not naver_place_id:
+                        continue
 
-                anchor_text = _extract_text(anchor, ["span", "strong", "em"])
-                if not anchor_text:
+                    anchor_text = _extract_text(anchor, ["span", "strong", "em"])
+                    if not anchor_text:
+                        try:
+                            anchor_text = (
+                                anchor.evaluate("(el) => (el.getAttribute('title') || el.getAttribute('aria-label') || '').trim()")
+                                or ""
+                            ).strip()
+                        except Exception:
+                            anchor_text = ""
+
+                    matched_name = _clean_candidate_name(anchor_text)
+                    if _is_noisy_candidate_name(matched_name):
+                        continue
+
                     try:
-                        anchor_text = (
-                            anchor.evaluate("(el) => (el.getAttribute('title') || el.getAttribute('aria-label') || '').trim()")
+                        snippet = (
+                            anchor.evaluate(
+                                "(el) => ((el.closest('li,article,section,div') || el.parentElement)?.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 180)"
+                            )
                             or ""
                         ).strip()
                     except Exception:
-                        anchor_text = ""
+                        snippet = ""
 
-                matched_name = _clean_candidate_name(anchor_text)
-                if _is_noisy_candidate_name(matched_name):
-                    continue
+                    candidate_x = _extract_coord_from_href(resolved_href, "x")
+                    candidate_y = _extract_coord_from_href(resolved_href, "y")
+                    if candidate_x is None:
+                        candidate_x = _extract_coord_from_href(resolved_href, "lng")
+                    if candidate_y is None:
+                        candidate_y = _extract_coord_from_href(resolved_href, "lat")
 
-                candidate_x = _extract_coord_from_href(resolved_href, "x")
-                candidate_y = _extract_coord_from_href(resolved_href, "y")
-                if candidate_x is None:
-                    candidate_x = _extract_coord_from_href(resolved_href, "lng")
-                if candidate_y is None:
-                    candidate_y = _extract_coord_from_href(resolved_href, "lat")
+                    current_candidate = {
+                        "naver_place_id": naver_place_id,
+                        "matched_name": matched_name,
+                        "x": candidate_x,
+                        "y": candidate_y,
+                        "snippet": snippet or None,
+                        "source_url": target_url,
+                    }
+                    existing = candidates.get(naver_place_id)
+                    if existing is None:
+                        candidates[naver_place_id] = current_candidate
+                    else:
+                        existing_score = _name_similarity(place_name, existing.get("matched_name"))
+                        current_score = _name_similarity(place_name, current_candidate.get("matched_name"))
+                        has_coord_upgrade = (
+                            (existing.get("x") is None or existing.get("y") is None)
+                            and current_candidate.get("x") is not None
+                            and current_candidate.get("y") is not None
+                        )
+                        has_better_snippet = not existing.get("snippet") and current_candidate.get("snippet")
+                        if current_score > existing_score or has_coord_upgrade or has_better_snippet:
+                            candidates[naver_place_id] = current_candidate
 
-                current_candidate = {
-                    "naver_place_id": naver_place_id,
-                    "matched_name": matched_name,
-                    "x": candidate_x,
-                    "y": candidate_y,
-                    "source_url": target_url,
-                }
-                existing = candidates.get(naver_place_id)
-                if existing is None:
-                    candidates[naver_place_id] = current_candidate
-                    continue
+                    if len(candidates) >= limit:
+                        break
+                if len(candidates) >= limit:
+                    break
 
-                existing_score = _name_similarity(place_name, existing.get("matched_name"))
-                current_score = _name_similarity(place_name, current_candidate.get("matched_name"))
-                if current_score > existing_score:
-                    candidates[naver_place_id] = current_candidate
-
-        logger.info(
-            "naver.mapping.search_iter url=%s candidates=%s",
-            target_url,
-            len(candidates),
-        )
+            logger.info(
+                "naver.mapping.search_iter query=%s url=%s candidates=%s",
+                query,
+                target_url,
+                len(candidates),
+            )
+            if candidates:
+                break
         if candidates:
             break
 
-    return list(candidates.values())
+    return list(candidates.values())[:limit]
 
 
 def resolve_naver_place_mapping(
@@ -993,19 +1303,55 @@ def resolve_naver_place_mapping(
 
     session: BrowserSession | None = None
     try:
+        kakao_context = _fetch_kakao_place_context(
+            kakao_place_id=kakao_place_id,
+            place_name=place_name,
+            x=x,
+            y=y,
+            config=config,
+        )
+        resolved_place_name = str(kakao_context.get("place_name") or place_name or "").strip()
+        resolved_x = _to_optional_float(kakao_context.get("x"))
+        resolved_y = _to_optional_float(kakao_context.get("y"))
+        resolved_address = (
+            str(kakao_context.get("road_address_name") or "").strip()
+            or str(kakao_context.get("address_name") or "").strip()
+            or None
+        )
+        payload["kakao_context"] = {
+            "resolved": bool(kakao_context.get("resolved")),
+            "kakao_doc_id": kakao_context.get("kakao_doc_id"),
+            "resolved_place_name": resolved_place_name or place_name,
+            "resolved_x": resolved_x,
+            "resolved_y": resolved_y,
+            "road_address_name": kakao_context.get("road_address_name"),
+            "address_name": kakao_context.get("address_name"),
+        }
+        query_variants = _build_mapping_queries(
+            place_name=resolved_place_name or (place_name or "").strip(),
+            kakao_context=kakao_context,
+        )
+        payload["mapping_queries"] = query_variants
+
         session = _create_browser_session(config)
-        candidates = _extract_mapping_candidates(session.page, place_name, config)
+        candidates = _extract_mapping_candidates(
+            session.page,
+            resolved_place_name or place_name,
+            config,
+            query_variants=query_variants,
+        )
         payload["candidate_count"] = len(candidates)
 
         best_candidate, scored_candidates = _select_best_mapping_candidate(
-            place_name=place_name,
+            place_name=resolved_place_name or place_name,
             candidates=candidates,
-            kakao_x=x,
-            kakao_y=y,
+            kakao_x=resolved_x if resolved_x is not None else x,
+            kakao_y=resolved_y if resolved_y is not None else y,
+            kakao_address=resolved_address,
         )
 
         if not best_candidate:
-            payload["reason"] = "no_candidates"
+            payload["reason"] = "ambiguous_candidates" if scored_candidates else "no_candidates"
             logger.info(
                 "naver.mapping.failed kakao_place_id=%s reason=%s candidate_count=%s",
                 kakao_place_id,
