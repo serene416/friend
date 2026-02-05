@@ -75,6 +75,7 @@ export default function HomeScreen() {
   const [showFavoritePopup, setShowFavoritePopup] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<PlayCategoryOption>(ALL_PLAY_CATEGORY);
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
+  const [failedHotplaceImageMap, setFailedHotplaceImageMap] = useState<Record<string, true>>({});
   const recommendation = useRecommendationStore((state) => state.recommendation);
 
   useEffect(() => {
@@ -82,6 +83,10 @@ export default function HomeScreen() {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
   }, []);
+
+  useEffect(() => {
+    setFailedHotplaceImageMap({});
+  }, [recommendation?.receivedAt]);
 
   const animateCategoryPanel = () => {
     LayoutAnimation.configureNext({
@@ -194,14 +199,21 @@ export default function HomeScreen() {
   const renderItem = ({ item }: { item: HomeCardItem }) => {
     if (item.kind === 'hotplace') {
       const tags = Array.from(new Set([item.category, item.sourceKeyword].filter(Boolean)));
+      const shouldRenderImage = Boolean(item.image) && !failedHotplaceImageMap[item.id];
 
       return (
         <TouchableOpacity
           style={styles.card}
           onPress={() => router.push(`/activity-detail?id=${encodeURIComponent(item.id)}`)}
         >
-          {item.image ? (
-            <Image source={{ uri: item.image }} style={styles.cardImage} />
+          {shouldRenderImage ? (
+            <Image
+              source={{ uri: item.image as string }}
+              style={styles.cardImage}
+              onError={() =>
+                setFailedHotplaceImageMap((previous) => ({ ...previous, [item.id]: true }))
+              }
+            />
           ) : (
             <CategoryMockImage
               style={styles.cardImage}

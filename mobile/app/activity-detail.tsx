@@ -51,6 +51,7 @@ export default function ActivityDetailScreen() {
   const [isOpeningPlaceUrl, setIsOpeningPlaceUrl] = useState(false);
   const [showFavoritePopup, setShowFavoritePopup] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [failedGalleryImageMap, setFailedGalleryImageMap] = useState<Record<string, true>>({});
   const { width: windowWidth } = useWindowDimensions();
 
   const hotplaceFromLatest = useMemo(
@@ -96,6 +97,7 @@ export default function ActivityDetailScreen() {
     : fallbackHeroImage
       ? [fallbackHeroImage]
       : [];
+  const displayGalleryImages = galleryImages.filter((imageUri) => !failedGalleryImageMap[imageUri]);
 
   const heroImageWidth = Math.max(windowWidth - 0.1, 1);
 
@@ -138,19 +140,30 @@ export default function ActivityDetailScreen() {
 
   useEffect(() => {
     setActivePhotoIndex(0);
+    setFailedGalleryImageMap({});
   }, [activityId]);
+
+  useEffect(() => {
+    if (displayGalleryImages.length === 0) {
+      setActivePhotoIndex(0);
+      return;
+    }
+    if (activePhotoIndex >= displayGalleryImages.length) {
+      setActivePhotoIndex(displayGalleryImages.length - 1);
+    }
+  }, [activePhotoIndex, displayGalleryImages.length]);
 
   const handlePhotoScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (galleryImages.length <= 1) {
+      if (displayGalleryImages.length <= 1) {
         setActivePhotoIndex(0);
         return;
       }
       const nextIndex = Math.round(event.nativeEvent.contentOffset.x / heroImageWidth);
-      const normalizedIndex = Math.min(Math.max(nextIndex, 0), galleryImages.length - 1);
+      const normalizedIndex = Math.min(Math.max(nextIndex, 0), displayGalleryImages.length - 1);
       setActivePhotoIndex(normalizedIndex);
     },
-    [galleryImages.length, heroImageWidth]
+    [displayGalleryImages.length, heroImageWidth]
   );
 
   const handleOpenPlaceUrl = useCallback(async () => {
@@ -203,7 +216,7 @@ export default function ActivityDetailScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.imageContainer}>
-          {galleryImages.length > 0 ? (
+          {displayGalleryImages.length > 0 ? (
             <>
               <ScrollView
                 horizontal
@@ -212,17 +225,20 @@ export default function ActivityDetailScreen() {
                 onMomentumScrollEnd={handlePhotoScrollEnd}
                 style={styles.imagePager}
               >
-                {galleryImages.map((imageUri, index) => (
+                {displayGalleryImages.map((imageUri, index) => (
                   <Image
                     key={`${activityId || title}-${index}`}
                     source={{ uri: imageUri }}
                     style={[styles.heroImage, { width: heroImageWidth }]}
+                    onError={() =>
+                      setFailedGalleryImageMap((previous) => ({ ...previous, [imageUri]: true }))
+                    }
                   />
                 ))}
               </ScrollView>
-              {galleryImages.length > 1 && (
+              {displayGalleryImages.length > 1 && (
                 <View style={styles.paginationContainer}>
-                  {galleryImages.map((_, index) => (
+                  {displayGalleryImages.map((_, index) => (
                     <View
                       key={`pagination-${index}`}
                       style={[styles.paginationDot, index === activePhotoIndex && styles.paginationDotActive]}

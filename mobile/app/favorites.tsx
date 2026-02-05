@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CategoryMockImage from '../components/CategoryMockImage';
@@ -33,6 +33,7 @@ export default function FavoritesScreen() {
   const { favorites, toggleFavorite } = useFavoriteStore();
   const recommendation = useRecommendationStore((state) => state.recommendation);
   const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
+  const [failedHotplaceImageMap, setFailedHotplaceImageMap] = useState<Record<string, true>>({});
 
   const favoriteItems = useMemo<FavoriteItem[]>(() => {
     const mockById = new Map(MOCK_ACTIVITIES.map((activity) => [activity.id, activity]));
@@ -77,13 +78,20 @@ export default function FavoritesScreen() {
   const renderItem = ({ item }: { item: FavoriteItem }) => {
     if (item.kind === 'hotplace') {
       const tags = Array.from(new Set([item.category, item.sourceKeyword].filter(Boolean)));
+      const shouldRenderImage = Boolean(item.image) && !failedHotplaceImageMap[item.id];
       return (
         <TouchableOpacity
           style={styles.card}
           onPress={() => router.push(`/activity-detail?id=${encodeURIComponent(item.id)}`)}
         >
-          {item.image ? (
-            <Image source={{ uri: item.image }} style={styles.cardImage} />
+          {shouldRenderImage ? (
+            <Image
+              source={{ uri: item.image as string }}
+              style={styles.cardImage}
+              onError={() =>
+                setFailedHotplaceImageMap((previous) => ({ ...previous, [item.id]: true }))
+              }
+            />
           ) : (
             <CategoryMockImage
               style={styles.cardImage}

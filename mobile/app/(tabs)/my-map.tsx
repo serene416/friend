@@ -10,7 +10,7 @@ import {
 } from '@/utils/recommendation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ export default function MyMapScreen() {
     const recommendation = useRecommendationStore((state) => state.recommendation);
     const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
     const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+    const [selectedImageFailed, setSelectedImageFailed] = useState(false);
     const bottomSheetRef = useRef<BottomSheet>(null);
 
     // Snap points: collapsed (half screen) -> full
@@ -87,6 +88,10 @@ export default function MyMapScreen() {
     const handleMapClick = useCallback(() => {
         setSelectedMarkerId(null);
     }, []);
+
+    useEffect(() => {
+        setSelectedImageFailed(false);
+    }, [selectedMarkerId, selectedItem?.image]);
 
     if (!favorites || favorites.length === 0) {
         return (
@@ -162,8 +167,12 @@ export default function MyMapScreen() {
                     >
                         <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
                             {/* Hero Image */}
-                            {selectedItem.image ? (
-                                <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
+                            {selectedItem.image && !selectedImageFailed ? (
+                                <Image
+                                    source={{ uri: selectedItem.image }}
+                                    style={styles.sheetImage}
+                                    onError={() => setSelectedImageFailed(true)}
+                                />
                             ) : (
                                 <CategoryMockImage
                                     style={styles.sheetImagePlaceholder}

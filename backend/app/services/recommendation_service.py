@@ -148,12 +148,10 @@ IRRELEVANT_PLACE_DESIGN_CONTEXT_TERMS = {
     "타일",
     "샷시",
 }
-EXCLUDED_HOTPLACE_KAKAO_PLACE_IDS = {
-    # Known places that repeatedly fail Kakao->Naver mapping validation.
-    "27247109",  # 넷마을
-    "2079051250",  # 에이모레더
-    "17994132",  # 스타킹노래방
-    "27241177",  # 옵티머스PC
+HIDE_HOTPLACE_MAPPING_REASONS = {
+    # Mapping issue buckets we decided to hide from the client.
+    "no_candidates",
+    "low_confidence",
 }
 
 FIXED_STATION_LIMIT = 1
@@ -176,20 +174,21 @@ RATING_SPAN = 1.5
 RATING_CONFIDENCE_MAX_COUNT = 2000
 BAYESIAN_PRIOR_MEAN = 4.2
 BAYESIAN_PRIOR_WEIGHT = 80.0
+REVIEW_COUNT_SCORE_EXPONENT = 1.35
 NEUTRAL_COMPONENT_SCORE = 0.5
 RAINY_WEATHER_KEYS = {"비", "눈"}
 SUPPORTED_WEATHER_KEYS = {"맑음", "구름많음", "흐림", "비", "눈", "default"}
 DEFAULT_RANKING_WEIGHTS = {
-    "distance": 0.35,
-    "rating": 0.30,
-    "weather": 0.25,
-    "confidence": 0.10,
+    "distance": 0.30,
+    "rating": 0.05,
+    "weather": 0.20,
+    "confidence": 0.45,
 }
 RAINY_RANKING_WEIGHTS = {
-    "distance": 0.30,
-    "rating": 0.25,
-    "weather": 0.35,
-    "confidence": 0.10,
+    "distance": 0.25,
+    "rating": 0.05,
+    "weather": 0.25,
+    "confidence": 0.45,
 }
 WEATHER_CATEGORY_SUITABILITY: dict[str, dict[str, float]] = {
     "맑음": {
@@ -409,6 +408,33 @@ class RecommendationService:
             return None
         return self._normalize_activity_intro(feature_payload.get("place_intro"))
 
+    @staticmethod
+    def _extract_mapping_reason_from_feature_payload(feature_payload: object) -> str | None:
+        if not isinstance(feature_payload, dict):
+            return None
+        raw_mapping = feature_payload.get("naver_mapping")
+        if not isinstance(raw_mapping, dict):
+            return None
+        reason = str(raw_mapping.get("reason") or "").strip().lower()
+        return reason or None
+
+    @staticmethod
+    def _normalize_reason(value: object) -> str | None:
+        reason = str(value or "").strip().lower()
+        return reason or None
+
+    @classmethod
+    def _should_hide_hotplace_for_mapping_issue(cls, feature: object) -> bool:
+        if not isinstance(feature, dict):
+            return False
+
+        mapping_reason = cls._normalize_reason(feature.get("mapping_issue_reason"))
+        if mapping_reason in HIDE_HOTPLACE_MAPPING_REASONS:
+            return True
+
+        photo_reason = cls._normalize_reason(feature.get("photo_collection_reason"))
+        return photo_reason in HIDE_HOTPLACE_MAPPING_REASONS
+
     def _extract_photo_collection_status_from_feature_payload(
         self,
         feature_payload: object,
@@ -480,6 +506,9 @@ class RecommendationService:
                 row.feature_payload
             )
             activity_intro = self._extract_activity_intro_from_feature_payload(row.feature_payload)
+            mapping_issue_reason = self._extract_mapping_reason_from_feature_payload(
+                row.feature_payload
+            )
             photo_collection_status, photo_collection_reason = (
                 self._extract_photo_collection_status_from_feature_payload(
                     row.feature_payload,
@@ -492,6 +521,7 @@ class RecommendationService:
                 "naver_rating": naver_rating,
                 "naver_rating_count": naver_rating_count,
                 "activity_intro": activity_intro,
+                "mapping_issue_reason": mapping_issue_reason,
                 "photo_collection_status": photo_collection_status,
                 "photo_collection_reason": photo_collection_reason,
                 "last_ingested_at": row.last_ingested_at,
@@ -512,8 +542,13 @@ class RecommendationService:
             return hotplaces
 
         enriched: list[MidpointHotplace] = []
+        filtered_by_mapping_issue = 0
         for hotplace in hotplaces:
             feature = feature_map.get(hotplace.kakao_place_id, {})
+            if self._should_hide_hotplace_for_mapping_issue(feature):
+                filtered_by_mapping_issue += 1
+                continue
+
             raw_photo_urls = feature.get("photo_urls")
             photo_urls = (
                 self._normalize_photo_urls(raw_photo_urls) if isinstance(raw_photo_urls, list) else []
@@ -549,6 +584,14 @@ class RecommendationService:
                         "photo_collection_reason": photo_collection_reason,
                     }
                 )
+            )
+
+        if filtered_by_mapping_issue:
+            logger.info(
+                "Filtered hotplaces due to mapping issues: filtered=%s total=%s reasons=%s",
+                filtered_by_mapping_issue,
+                len(hotplaces),
+                sorted(HIDE_HOTPLACE_MAPPING_REASONS),
             )
         return enriched
 
@@ -782,8 +825,6 @@ class RecommendationService:
         place_name = str(place_doc.get("place_name", "")).strip()
         if not place_id or not place_name:
             return None
-        if place_id in EXCLUDED_HOTPLACE_KAKAO_PLACE_IDS:
-            return None
         if self._is_irrelevant_place_for_play(place_doc):
             return None
 
@@ -992,11 +1033,36 @@ class RecommendationService:
         )
         rating_score = self._clamp_unit((bayesian_rating - RATING_BASELINE) / RATING_SPAN)
         confidence_score = (
-            self._clamp_unit(math.log1p(rating_count) / math.log1p(RATING_CONFIDENCE_MAX_COUNT))
+            self._clamp_unit(
+                (
+                    self._clamp_unit(math.log1p(rating_count) / math.log1p(RATING_CONFIDENCE_MAX_COUNT))
+                )
+                ** REVIEW_COUNT_SCORE_EXPONENT
+            )
             if hotplace.naver_rating_count is not None
             else NEUTRAL_COMPONENT_SCORE
         )
         return rating_score, confidence_score, bayesian_rating
+
+    @staticmethod
+    def _is_zero_naver_rating(hotplace: MidpointHotplace) -> bool:
+        return hotplace.naver_rating is not None and hotplace.naver_rating <= 0.0
+
+    def _filter_zero_rated_hotplaces(
+        self,
+        hotplaces: list[MidpointHotplace],
+    ) -> list[MidpointHotplace]:
+        if not hotplaces:
+            return hotplaces
+        filtered = [hotplace for hotplace in hotplaces if not self._is_zero_naver_rating(hotplace)]
+        if filtered and len(filtered) < len(hotplaces):
+            logger.info(
+                "Filtered zero-rated hotplaces: filtered=%s total=%s",
+                len(hotplaces) - len(filtered),
+                len(hotplaces),
+            )
+            return filtered
+        return hotplaces
 
     def _calculate_weather_suitability_score(
         self,
@@ -1054,6 +1120,9 @@ class RecommendationService:
     ) -> list[MidpointHotplace]:
         if not hotplaces:
             return hotplaces
+        hotplaces = self._filter_zero_rated_hotplaces(hotplaces)
+        if not hotplaces:
+            return hotplaces
 
         weather_key = self._normalize_weather_key(request.weather_key)
         weights = self._resolve_ranking_weights(weather_key)
@@ -1100,6 +1169,7 @@ class RecommendationService:
         ranked_hotplaces.sort(
             key=lambda item: (
                 -(item.ranking_score or 0.0),
+                -(item.naver_rating_count or 0),
                 item.distance is None,
                 item.distance if item.distance is not None else float("inf"),
                 item.kakao_place_id,

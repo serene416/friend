@@ -338,6 +338,68 @@ class RecommendationServiceTests(unittest.TestCase):
         self.assertIsNotNone(ranked[1].ranking_score)
         self.assertGreater(ranked[0].ranking_score, ranked[1].ranking_score)
 
+    def test_rank_hotplaces_boosts_high_review_count_over_rating_gap(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        request = MidpointHotplaceRequest(
+            participants=[
+                {"lat": 37.5000, "lng": 127.0000},
+                {"lat": 37.5000, "lng": 127.0600},
+            ],
+            weather_key=None,
+        )
+        high_rating_low_reviews = self._build_hotplace(
+            kakao_place_id="high-rating-low-reviews",
+            source_keyword="보드게임카페",
+            x=127.0300,
+            y=37.5000,
+            rating=4.9,
+            rating_count=5,
+        )
+        lower_rating_high_reviews = self._build_hotplace(
+            kakao_place_id="lower-rating-high-reviews",
+            source_keyword="보드게임카페",
+            x=127.0300,
+            y=37.5000,
+            rating=4.2,
+            rating_count=2000,
+        )
+
+        ranked = service._rank_hotplaces([high_rating_low_reviews, lower_rating_high_reviews], request)
+
+        self.assertEqual(ranked[0].kakao_place_id, "lower-rating-high-reviews")
+        self.assertGreater(ranked[0].ranking_score, ranked[1].ranking_score)
+
+    def test_rank_hotplaces_filters_zero_rated_places_when_other_rated_places_exist(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        request = MidpointHotplaceRequest(
+            participants=[
+                {"lat": 37.5000, "lng": 127.0000},
+                {"lat": 37.5000, "lng": 127.0600},
+            ],
+            weather_key=None,
+        )
+        zero_rating = self._build_hotplace(
+            kakao_place_id="zero-rated",
+            source_keyword="보드게임카페",
+            x=127.0300,
+            y=37.5000,
+            rating=0.0,
+            rating_count=120,
+        )
+        positive_rating = self._build_hotplace(
+            kakao_place_id="positive-rated",
+            source_keyword="보드게임카페",
+            x=127.0300,
+            y=37.5000,
+            rating=4.1,
+            rating_count=40,
+        )
+
+        ranked = service._rank_hotplaces([zero_rating, positive_rating], request)
+
+        self.assertEqual(len(ranked), 1)
+        self.assertEqual(ranked[0].kakao_place_id, "positive-rated")
+
     def test_cache_key_changes_when_weather_key_changes(self):
         service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
         base_request = _build_request()
@@ -388,33 +450,50 @@ class RecommendationServiceTests(unittest.TestCase):
         )
         self.assertIsNotNone(kept)
 
-    def test_build_hotplace_filters_out_known_unreliable_mapping_places(self):
+    def test_should_hide_hotplace_for_mapping_issue(self):
         service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
-        excluded = service._build_hotplace(
-            {
-                "id": "27247109",
-                "place_name": "넷마을",
-                "category_name": "인터넷PC방",
-                "x": "127.3602",
-                "y": "36.3543",
-            },
-            source_station="월평",
-            source_keyword="PC방",
+        self.assertTrue(
+            service._should_hide_hotplace_for_mapping_issue(
+                {"mapping_issue_reason": "low_confidence"}
+            )
         )
-        self.assertIsNone(excluded)
+        self.assertTrue(
+            service._should_hide_hotplace_for_mapping_issue(
+                {"photo_collection_reason": "no_candidates"}
+            )
+        )
+        self.assertFalse(
+            service._should_hide_hotplace_for_mapping_issue(
+                {"mapping_issue_reason": "search_error"}
+            )
+        )
 
-        kept = service._build_hotplace(
-            {
-                "id": "play-2",
-                "place_name": "월평 보드게임카페",
-                "category_name": "카페",
-                "x": "127.3602",
-                "y": "36.3543",
-            },
-            source_station="월평",
+    def test_attach_hotplace_features_filters_mapping_issue_places(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        target = MidpointHotplace(
+            kakao_place_id="place-1",
+            place_name="테스트 장소",
+            x=127.0,
+            y=37.0,
+            source_station="강남",
             source_keyword="보드게임카페",
         )
-        self.assertIsNotNone(kept)
+
+        with patch.object(
+            service,
+            "_fetch_hotplace_feature_map",
+            new=AsyncMock(
+                return_value={
+                    "place-1": {
+                        "mapping_issue_reason": "low_confidence",
+                        "photo_collection_reason": "low_confidence",
+                    }
+                }
+            ),
+        ):
+            result = self._run(service._attach_hotplace_features([target], session=object()))
+
+        self.assertEqual(result, [])
 
 
 if __name__ == "__main__":
