@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -41,6 +40,9 @@ interface HotplaceCardItem {
 
 type HomeCardItem = (Activity & { kind: 'mock' }) | HotplaceCardItem;
 type PlayCategoryFilter = (typeof PLAY_CATEGORIES)[number];
+const ALL_PLAY_CATEGORY = '전체' as const;
+type PlayCategoryOption = PlayCategoryFilter | typeof ALL_PLAY_CATEGORY;
+const PLAY_CATEGORY_OPTIONS: readonly PlayCategoryOption[] = [ALL_PLAY_CATEGORY, ...PLAY_CATEGORIES];
 
 const WEATHER_THEMES: Record<string, { bg: string; text: string; border?: string }> = {
   맑음: { bg: '#81CFEF', text: '#FFFFFF' },
@@ -79,7 +81,8 @@ export default function HomeScreen() {
   const { toggleFavorite, isFavorite, favorites } = useFavoriteStore();
   const { selectedFriends } = useFriendStore();
   const [showFavoritePopup, setShowFavoritePopup] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<PlayCategoryFilter | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<PlayCategoryOption>(ALL_PLAY_CATEGORY);
+  const [showCategoryOptions, setShowCategoryOptions] = useState(false);
   const recommendation = useRecommendationStore((state) => state.recommendation);
 
   const isNoPrecipitation = data?.precipitationType === '없음';
@@ -195,7 +198,7 @@ export default function HomeScreen() {
   }, [recommendation]);
 
   const filteredHotplaceItems = useMemo(() => {
-    if (!selectedCategory) {
+    if (selectedCategory === ALL_PLAY_CATEGORY) {
       return hotplaceItems;
     }
     return hotplaceItems.filter((item) => item.category === selectedCategory);
@@ -349,7 +352,7 @@ export default function HomeScreen() {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>오늘 누구랑 놀까요? 친구를 선택해보세요! 🥳</Text>
             </View>
-          ) : selectedCategory ? (
+          ) : selectedCategory !== ALL_PLAY_CATEGORY ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
                 {selectedCategory} 카테고리 추천이 아직 없어요.
@@ -441,42 +444,43 @@ export default function HomeScreen() {
                 {hotplaceItems.length > 0 ? '위치 기반 추천 활동' : '오늘의 추천 활동'}
               </Text>
               {selectedFriends.length > 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryFilterScroll}
-                  contentContainerStyle={styles.categoryFilterContent}
+                <TouchableOpacity
+                  style={styles.categoryToggleButton}
+                  onPress={() => setShowCategoryOptions((previous) => !previous)}
                 >
-                  {PLAY_CATEGORIES.map((category) => {
-                    const isSelected = selectedCategory === category;
-                    return (
-                      <TouchableOpacity
-                        key={category}
-                        style={[
-                          styles.categoryChip,
-                          isSelected && styles.categoryChipSelected,
-                        ]}
-                        onPress={() =>
-                          setSelectedCategory((previous) =>
-                            previous === category ? null : category
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.categoryChipText,
-                            isSelected && styles.categoryChipTextSelected,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {category}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                  <Text style={styles.categoryToggleButtonText}>카테고리</Text>
+                  <MaterialCommunityIcons
+                    name={showCategoryOptions ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color='#4B5563'
+                  />
+                </TouchableOpacity>
               ) : null}
             </View>
+            {selectedFriends.length > 0 && showCategoryOptions ? (
+              <View style={styles.categoryFilterPanel}>
+                {PLAY_CATEGORY_OPTIONS.map((category) => {
+                  const isSelected = selectedCategory === category;
+                  return (
+                    <TouchableOpacity
+                      key={category}
+                      style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
+                      onPress={() => {
+                        setSelectedCategory(category);
+                        setShowCategoryOptions(false);
+                      }}
+                    >
+                      <Text
+                        style={[styles.categoryChipText, isSelected && styles.categoryChipTextSelected]}
+                        numberOfLines={1}
+                      >
+                        {category}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
           </>
         }
       />
@@ -548,7 +552,7 @@ const styles = StyleSheet.create({
   },
   selectorContainer: { marginBottom: 25 },
   sectionHeader: {
-    marginBottom: 15,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -559,15 +563,31 @@ const styles = StyleSheet.create({
     fontFamily: 'Pretendard-Bold',
     flexShrink: 0,
   },
-  categoryFilterScroll: {
-    flex: 1,
-  },
-  categoryFilterContent: {
+  categoryToggleButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 4,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    backgroundColor: '#F9FAFB',
+  },
+  categoryToggleButtonText: {
+    fontSize: 12,
+    color: '#374151',
+    fontFamily: 'Pretendard-Medium',
+  },
+  categoryFilterPanel: {
+    marginBottom: 15,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   categoryChip: {
     marginLeft: 6,
+    marginBottom: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
