@@ -90,6 +90,35 @@ const normalizeRankingReasons = (value: unknown): string[] => {
     .slice(0, 3);
 };
 
+const normalizeActivityIntro = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const buildFallbackActivityIntro = (hotplace: MidpointHotplace): string | null => {
+  const placeName = hotplace.place_name?.trim();
+  const station = hotplace.source_station?.trim();
+  const keyword = hotplace.source_keyword?.trim();
+  const category = hotplace.category_name?.trim();
+
+  if (!placeName) {
+    return null;
+  }
+  if (station && keyword) {
+    return `${placeName}은 ${station} 근처에서 ${keyword}를 즐기기 좋은 장소예요.`;
+  }
+  if (keyword) {
+    return `${placeName}은 ${keyword} 중심의 활동을 찾을 때 가볍게 들르기 좋아요.`;
+  }
+  if (category) {
+    return `${placeName}은 ${category} 카테고리로 추천되는 장소예요.`;
+  }
+  return null;
+};
+
 const normalizeCoordinate = (value?: Coordinate | null): Coordinate | null => {
   if (!value || !isFiniteNumber(value.lat) || !isFiniteNumber(value.lng)) {
     return null;
@@ -126,6 +155,8 @@ const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => {
       ? hotplace.representative_image_url
       : photoUrls[0] ?? null;
   const photoCollectionStatus = normalizePhotoCollectionStatus(hotplace.photo_collection_status);
+  const activityIntro =
+    normalizeActivityIntro(hotplace.activity_intro) ?? buildFallbackActivityIntro(hotplace);
 
   return {
     ...hotplace,
@@ -138,6 +169,7 @@ const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => {
     naver_rating_count: toOptionalPositiveInt(hotplace.naver_rating_count),
     photo_collection_status: photoUrls.length > 0 ? 'READY' : photoCollectionStatus,
     photo_collection_reason: normalizePhotoCollectionReason(hotplace.photo_collection_reason),
+    activity_intro: activityIntro,
     ranking_score: toOptionalRankingScore(hotplace.ranking_score),
     ranking_reasons: normalizeRankingReasons(hotplace.ranking_reasons),
   };

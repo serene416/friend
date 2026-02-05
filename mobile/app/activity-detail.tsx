@@ -1,3 +1,4 @@
+import CategoryMockImage from '@/components/CategoryMockImage';
 import KakaoMap from '@/components/KakaoMap';
 import { MOCK_ACTIVITIES } from '@/constants/data';
 import { useFavoriteStore } from '@/store/useFavoriteStore';
@@ -37,46 +38,6 @@ const parseIdParam = (value: string | string[] | undefined) => {
   } catch {
     return raw.trim();
   }
-};
-
-const PHOTO_COLLECTION_REASON_LABELS: Record<string, string> = {
-  no_candidates: '네이버 장소를 찾지 못했어요',
-  low_confidence: '장소 매칭 정확도가 낮아요',
-  search_error: '검색 중 오류가 발생했어요',
-  missing_place_name: '장소 이름 정보가 부족해요',
-  missing_naver_place_id: '네이버 장소 ID를 찾지 못했어요',
-  crawler_error: '크롤러 실행 중 오류가 발생했어요',
-  naver_target_unavailable: '대상 페이지 접근이 불가능해요',
-  crawl_skipped: '크롤러가 대상을 건너뛰었어요',
-  crawler_partial_error: '수집 중 일부 단계에서 오류가 있었어요',
-};
-
-const getPhotoPlaceholderMeta = (status?: string | null, reason?: string | null) => {
-  if (status === 'FAILED') {
-    return {
-      icon: 'alert-circle-outline' as const,
-      iconColor: '#DC2626',
-      title: '사진 수집 실패',
-      subtitle: reason ? PHOTO_COLLECTION_REASON_LABELS[reason] ?? `실패 사유: ${reason}` : null,
-      failed: true,
-    };
-  }
-  if (status === 'EMPTY') {
-    return {
-      icon: 'image-outline' as const,
-      iconColor: '#9DA3AF',
-      title: '수집된 장소 사진이 없어요',
-      subtitle: null,
-      failed: false,
-    };
-  }
-  return {
-    icon: 'clock-outline' as const,
-    iconColor: '#9DA3AF',
-    title: '사진 수집 대기 중',
-    subtitle: null,
-    failed: false,
-  };
 };
 
 export default function ActivityDetailScreen() {
@@ -135,10 +96,6 @@ export default function ActivityDetailScreen() {
     : fallbackHeroImage
       ? [fallbackHeroImage]
       : [];
-  const photoPlaceholder = getPhotoPlaceholderMeta(
-    hotplace?.photo_collection_status,
-    hotplace?.photo_collection_reason
-  );
 
   const heroImageWidth = Math.max(windowWidth - 0.1, 1);
 
@@ -165,8 +122,18 @@ export default function ActivityDetailScreen() {
     )
     : activity?.tags ?? [];
 
+  const fallbackHotplaceDescription = hotplace
+    ? hotplace.source_station && hotplace.source_keyword
+      ? `${title}은 ${hotplace.source_station} 근처에서 ${hotplace.source_keyword}를 즐기기 좋은 장소예요.`
+      : hotplace.source_keyword
+        ? `${title}은 ${hotplace.source_keyword} 중심의 활동을 찾을 때 가볍게 들르기 좋아요.`
+        : hotplace.category_name
+          ? `${title}은 ${hotplace.category_name} 카테고리로 추천되는 장소예요.`
+          : null
+    : null;
+
   const description = hotplace
-    ? `${title}은(는) 친구들과의 중간 지점을 기준으로 추천된 장소예요. 카테고리: ${category}.`
+    ? hotplace.activity_intro?.trim() || fallbackHotplaceDescription || '소개글을 준비 중이에요.'
     : activity?.description ?? '활동 정보를 준비 중입니다.';
 
   useEffect(() => {
@@ -265,27 +232,13 @@ export default function ActivityDetailScreen() {
               )}
             </>
           ) : (
-            <View style={styles.heroImagePlaceholder}>
-              <MaterialCommunityIcons
-                name={photoPlaceholder.icon}
-                size={36}
-                color={photoPlaceholder.iconColor}
-              />
-              <Text style={[
-                styles.heroImagePlaceholderText,
-                photoPlaceholder.failed && styles.heroImagePlaceholderTextFailed,
-              ]}>
-                {photoPlaceholder.title}
-              </Text>
-              {photoPlaceholder.subtitle ? (
-                <Text style={[
-                  styles.heroImagePlaceholderSubText,
-                  photoPlaceholder.failed && styles.heroImagePlaceholderSubTextFailed,
-                ]}>
-                  {photoPlaceholder.subtitle}
-                </Text>
-              ) : null}
-            </View>
+            <CategoryMockImage
+              style={styles.heroImagePlaceholder}
+              category={category}
+              sourceKeyword={hotplace?.source_keyword}
+              photoCollectionStatus={hotplace?.photo_collection_status}
+              photoCollectionReason={hotplace?.photo_collection_reason}
+            />
           )}
         </View>
 

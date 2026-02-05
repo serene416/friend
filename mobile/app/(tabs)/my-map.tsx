@@ -1,4 +1,4 @@
-
+import CategoryMockImage from '@/components/CategoryMockImage';
 import KakaoMap from '@/components/KakaoMap';
 import { useFavoriteStore } from '@/store/useFavoriteStore';
 import { useRecommendationStore } from '@/store/useRecommendationStore';
@@ -14,46 +14,6 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const PHOTO_COLLECTION_REASON_LABELS: Record<string, string> = {
-    no_candidates: '네이버 장소를 찾지 못했어요',
-    low_confidence: '장소 매칭 정확도가 낮아요',
-    search_error: '검색 중 오류가 발생했어요',
-    missing_place_name: '장소 이름 정보가 부족해요',
-    missing_naver_place_id: '네이버 장소 ID를 찾지 못했어요',
-    crawler_error: '크롤러 실행 중 오류가 발생했어요',
-    naver_target_unavailable: '대상 페이지 접근이 불가능해요',
-    crawl_skipped: '크롤러가 대상을 건너뛰었어요',
-    crawler_partial_error: '수집 중 일부 단계에서 오류가 있었어요',
-};
-
-const getPhotoPlaceholderMeta = (status?: string | null, reason?: string | null) => {
-    if (status === 'FAILED') {
-        return {
-            icon: 'alert-circle-outline' as const,
-            iconColor: '#DC2626',
-            title: '사진 수집 실패',
-            subtitle: reason ? PHOTO_COLLECTION_REASON_LABELS[reason] ?? `실패 사유: ${reason}` : null,
-            failed: true,
-        };
-    }
-    if (status === 'EMPTY') {
-        return {
-            icon: 'image-outline' as const,
-            iconColor: '#9DA3AF',
-            title: '수집된 장소 사진이 없어요',
-            subtitle: null,
-            failed: false,
-        };
-    }
-    return {
-        icon: 'clock-outline' as const,
-        iconColor: '#9DA3AF',
-        title: '사진 수집 대기 중',
-        subtitle: null,
-        failed: false,
-    };
-};
 
 export default function MyMapScreen() {
     const { favorites } = useFavoriteStore();
@@ -114,6 +74,7 @@ export default function MyMapScreen() {
             phone: hotplace.phone || '전화번호 정보 없음',
             sourceStation: hotplace.source_station,
             sourceKeyword: hotplace.source_keyword,
+            activityIntro: hotplace.activity_intro ?? null,
             photoCollectionStatus: hotplace.photo_collection_status ?? 'PENDING',
             photoCollectionReason: hotplace.photo_collection_reason ?? null,
         };
@@ -141,9 +102,19 @@ export default function MyMapScreen() {
         );
     }
 
+    const fallbackDescription = selectedItem
+        ? selectedItem.sourceStation && selectedItem.sourceKeyword
+            ? `${selectedItem.title}은 ${selectedItem.sourceStation} 근처에서 ${selectedItem.sourceKeyword}를 즐기기 좋은 장소예요.`
+            : selectedItem.sourceKeyword
+                ? `${selectedItem.title}은 ${selectedItem.sourceKeyword} 중심의 활동을 찾을 때 가볍게 들르기 좋아요.`
+                : selectedItem.category
+                    ? `${selectedItem.title}은 ${selectedItem.category} 카테고리로 추천되는 장소예요.`
+                    : null
+        : null;
+
     // Detail helper variables derived similar to ActivityDetailScreen
     const description = selectedItem
-        ? `${selectedItem.title}은(는) 친구들과의 중간 지점을 기준으로 추천된 장소예요. 카테고리: ${selectedItem.category}.`
+        ? selectedItem.activityIntro?.trim() || fallbackDescription || '소개글을 준비 중이에요.'
         : '';
 
     const highlightItems = selectedItem
@@ -162,10 +133,6 @@ export default function MyMapScreen() {
             },
         ]
         : [];
-    const photoPlaceholder = getPhotoPlaceholderMeta(
-        selectedItem?.photoCollectionStatus,
-        selectedItem?.photoCollectionReason
-    );
 
     return (
         <SafeAreaView style={styles.container}>
@@ -198,31 +165,13 @@ export default function MyMapScreen() {
                             {selectedItem.image ? (
                                 <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
                             ) : (
-                                <View style={styles.sheetImagePlaceholder}>
-                                    <MaterialCommunityIcons
-                                        name={photoPlaceholder.icon}
-                                        size={32}
-                                        color={photoPlaceholder.iconColor}
-                                    />
-                                    <Text
-                                        style={[
-                                            styles.sheetImagePlaceholderText,
-                                            photoPlaceholder.failed && styles.sheetImagePlaceholderTextFailed,
-                                        ]}
-                                    >
-                                        {photoPlaceholder.title}
-                                    </Text>
-                                    {photoPlaceholder.subtitle ? (
-                                        <Text
-                                            style={[
-                                                styles.sheetImagePlaceholderSubText,
-                                                photoPlaceholder.failed && styles.sheetImagePlaceholderSubTextFailed,
-                                            ]}
-                                        >
-                                            {photoPlaceholder.subtitle}
-                                        </Text>
-                                    ) : null}
-                                </View>
+                                <CategoryMockImage
+                                    style={styles.sheetImagePlaceholder}
+                                    category={selectedItem.category}
+                                    sourceKeyword={selectedItem.sourceKeyword}
+                                    photoCollectionStatus={selectedItem.photoCollectionStatus}
+                                    photoCollectionReason={selectedItem.photoCollectionReason}
+                                />
                             )}
 
                             <View style={styles.sheetInfo}>

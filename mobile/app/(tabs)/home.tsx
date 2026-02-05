@@ -1,15 +1,19 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  LayoutAnimation,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import CategoryMockImage from '../../components/CategoryMockImage';
 import FriendSelector from '../../components/FriendSelector';
 import { Activity } from '../../constants/data';
 import { useCurrentWeather } from '../../hooks/useCurrentWeather';
@@ -62,18 +66,6 @@ const WEATHER_BG_IMAGES: Record<string, any> = {
   default: require('../../assets/weather/sun_bg.png'),
 };
 
-const PHOTO_COLLECTION_REASON_LABELS: Record<string, string> = {
-  no_candidates: '네이버 장소를 찾지 못했어요',
-  low_confidence: '장소 매칭 정확도가 낮아요',
-  search_error: '검색 중 오류가 발생했어요',
-  missing_place_name: '장소 이름 정보가 부족해요',
-  missing_naver_place_id: '네이버 장소 ID를 찾지 못했어요',
-  crawler_error: '크롤러 실행 중 오류가 발생했어요',
-  naver_target_unavailable: '대상 페이지 접근이 불가능해요',
-  crawl_skipped: '크롤러가 대상을 건너뛰었어요',
-  crawler_partial_error: '수집 중 일부 단계에서 오류가 있었어요',
-};
-
 export default function HomeScreen() {
   const router = useRouter();
 
@@ -84,6 +76,27 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<PlayCategoryOption>(ALL_PLAY_CATEGORY);
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
   const recommendation = useRecommendationStore((state) => state.recommendation);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
+  const animateCategoryPanel = () => {
+    LayoutAnimation.configureNext({
+      duration: 220,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+  };
 
   const isNoPrecipitation = data?.precipitationType === '없음';
   const weatherStatusText = isNoPrecipitation
@@ -108,34 +121,6 @@ export default function HomeScreen() {
 
   const formatValue = (value: number | null, suffix: string) =>
     value === null ? '-' : `${value}${suffix}`;
-
-  const getPhotoPlaceholderMeta = (
-    status: HotplaceCardItem['photoCollectionStatus'],
-    reason: HotplaceCardItem['photoCollectionReason']
-  ) => {
-    if (status === 'FAILED') {
-      return {
-        icon: 'alert-circle-outline' as const,
-        iconColor: '#DC2626',
-        title: '사진 수집 실패',
-        subtitle: reason ? PHOTO_COLLECTION_REASON_LABELS[reason] ?? `실패 사유: ${reason}` : null,
-      };
-    }
-    if (status === 'EMPTY') {
-      return {
-        icon: 'image-outline' as const,
-        iconColor: '#9DA3AF',
-        title: '수집된 장소 사진이 없어요',
-        subtitle: null,
-      };
-    }
-    return {
-      icon: 'clock-outline' as const,
-      iconColor: '#9DA3AF',
-      title: '사진 수집 대기 중',
-      subtitle: null,
-    };
-  };
 
   const hotplaceItems = useMemo<HotplaceCardItem[]>(() => {
     if (!recommendation?.hotplaces?.length) {
@@ -209,8 +194,6 @@ export default function HomeScreen() {
   const renderItem = ({ item }: { item: HomeCardItem }) => {
     if (item.kind === 'hotplace') {
       const tags = Array.from(new Set([item.category, item.sourceKeyword].filter(Boolean)));
-      const placeholder = getPhotoPlaceholderMeta(item.photoCollectionStatus, item.photoCollectionReason);
-      const isFailedPhotoCollection = item.photoCollectionStatus === 'FAILED';
 
       return (
         <TouchableOpacity
@@ -220,23 +203,13 @@ export default function HomeScreen() {
           {item.image ? (
             <Image source={{ uri: item.image }} style={styles.cardImage} />
           ) : (
-            <View style={styles.cardImagePlaceholder}>
-              <MaterialCommunityIcons name={placeholder.icon} size={32} color={placeholder.iconColor} />
-              <Text style={[
-                styles.cardImagePlaceholderText,
-                isFailedPhotoCollection && styles.cardImagePlaceholderTextFailed,
-              ]}>
-                {placeholder.title}
-              </Text>
-              {placeholder.subtitle ? (
-                <Text style={[
-                  styles.cardImagePlaceholderSubText,
-                  isFailedPhotoCollection && styles.cardImagePlaceholderSubTextFailed,
-                ]}>
-                  {placeholder.subtitle}
-                </Text>
-              ) : null}
-            </View>
+            <CategoryMockImage
+              style={styles.cardImage}
+              category={item.category}
+              sourceKeyword={item.sourceKeyword}
+              photoCollectionStatus={item.photoCollectionStatus}
+              photoCollectionReason={item.photoCollectionReason}
+            />
           )}
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
@@ -446,7 +419,10 @@ export default function HomeScreen() {
               {selectedFriends.length > 0 ? (
                 <TouchableOpacity
                   style={styles.categoryToggleButton}
-                  onPress={() => setShowCategoryOptions((previous) => !previous)}
+                  onPress={() => {
+                    animateCategoryPanel();
+                    setShowCategoryOptions((previous) => !previous);
+                  }}
                 >
                   <Text style={styles.categoryToggleButtonText}>카테고리</Text>
                   <MaterialCommunityIcons
@@ -466,6 +442,7 @@ export default function HomeScreen() {
                       key={category}
                       style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
                       onPress={() => {
+                        animateCategoryPanel();
                         setSelectedCategory(category);
                         setShowCategoryOptions(false);
                       }}

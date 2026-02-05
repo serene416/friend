@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import CategoryMockImage from '../components/CategoryMockImage';
 import { Activity, MOCK_ACTIVITIES } from '../constants/data';
 import { useFavoriteStore } from '../store/useFavoriteStore';
 import { useRecommendationStore } from '../store/useRecommendationStore';
@@ -17,7 +18,7 @@ interface FavoriteHotplaceItem {
   kind: 'hotplace';
   id: string;
   title: string;
-  image?: string | null;
+  image: string | null;
   distanceLabel: string;
   category: string;
   sourceKeyword: string;
@@ -26,46 +27,6 @@ interface FavoriteHotplaceItem {
 }
 
 type FavoriteItem = (Activity & { kind: 'mock' }) | FavoriteHotplaceItem;
-
-const PHOTO_COLLECTION_REASON_LABELS: Record<string, string> = {
-  no_candidates: '네이버 장소를 찾지 못했어요',
-  low_confidence: '장소 매칭 정확도가 낮아요',
-  search_error: '검색 중 오류가 발생했어요',
-  missing_place_name: '장소 이름 정보가 부족해요',
-  missing_naver_place_id: '네이버 장소 ID를 찾지 못했어요',
-  crawler_error: '크롤러 실행 중 오류가 발생했어요',
-  naver_target_unavailable: '대상 페이지 접근이 불가능해요',
-  crawl_skipped: '크롤러가 대상을 건너뛰었어요',
-  crawler_partial_error: '수집 중 일부 단계에서 오류가 있었어요',
-};
-
-const getPhotoPlaceholderMeta = (
-  status: FavoriteHotplaceItem['photoCollectionStatus'],
-  reason: FavoriteHotplaceItem['photoCollectionReason']
-) => {
-  if (status === 'FAILED') {
-    return {
-      icon: 'alert-circle-outline' as const,
-      iconColor: '#DC2626',
-      title: '사진 수집 실패',
-      subtitle: reason ? PHOTO_COLLECTION_REASON_LABELS[reason] ?? `실패 사유: ${reason}` : null,
-    };
-  }
-  if (status === 'EMPTY') {
-    return {
-      icon: 'image-outline' as const,
-      iconColor: '#9DA3AF',
-      title: '수집된 장소 사진이 없어요',
-      subtitle: null,
-    };
-  }
-  return {
-    icon: 'clock-outline' as const,
-    iconColor: '#9DA3AF',
-    title: '사진 수집 대기 중',
-    subtitle: null,
-  };
-};
 
 export default function FavoritesScreen() {
   const router = useRouter();
@@ -77,7 +38,7 @@ export default function FavoritesScreen() {
     const mockById = new Map(MOCK_ACTIVITIES.map((activity) => [activity.id, activity]));
 
     return favorites
-      .map((favoriteId) => {
+      .map((favoriteId): FavoriteItem | null => {
         const mockActivity = mockById.get(favoriteId);
         if (mockActivity) {
           return {
@@ -116,8 +77,6 @@ export default function FavoritesScreen() {
   const renderItem = ({ item }: { item: FavoriteItem }) => {
     if (item.kind === 'hotplace') {
       const tags = Array.from(new Set([item.category, item.sourceKeyword].filter(Boolean)));
-      const placeholder = getPhotoPlaceholderMeta(item.photoCollectionStatus, item.photoCollectionReason);
-      const isFailedPhotoCollection = item.photoCollectionStatus === 'FAILED';
       return (
         <TouchableOpacity
           style={styles.card}
@@ -126,23 +85,13 @@ export default function FavoritesScreen() {
           {item.image ? (
             <Image source={{ uri: item.image }} style={styles.cardImage} />
           ) : (
-            <View style={styles.cardImagePlaceholder}>
-              <MaterialCommunityIcons name={placeholder.icon} size={32} color={placeholder.iconColor} />
-              <Text style={[
-                styles.cardImagePlaceholderText,
-                isFailedPhotoCollection && styles.cardImagePlaceholderTextFailed,
-              ]}>
-                {placeholder.title}
-              </Text>
-              {placeholder.subtitle ? (
-                <Text style={[
-                  styles.cardImagePlaceholderSubText,
-                  isFailedPhotoCollection && styles.cardImagePlaceholderSubTextFailed,
-                ]}>
-                  {placeholder.subtitle}
-                </Text>
-              ) : null}
-            </View>
+            <CategoryMockImage
+              style={styles.cardImage}
+              category={item.category}
+              sourceKeyword={item.sourceKeyword}
+              photoCollectionStatus={item.photoCollectionStatus}
+              photoCollectionReason={item.photoCollectionReason}
+            />
           )}
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>

@@ -29,6 +29,7 @@ export interface MidpointHotplace {
   distance?: number | null;
   source_station: string;
   source_keyword: string;
+  activity_intro?: string | null;
   representative_image_url?: string | null;
   photo_urls?: string[];
   naver_rating?: number | null;

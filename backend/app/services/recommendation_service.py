@@ -148,6 +148,13 @@ IRRELEVANT_PLACE_DESIGN_CONTEXT_TERMS = {
     "타일",
     "샷시",
 }
+EXCLUDED_HOTPLACE_KAKAO_PLACE_IDS = {
+    # Known places that repeatedly fail Kakao->Naver mapping validation.
+    "27247109",  # 넷마을
+    "2079051250",  # 에이모레더
+    "17994132",  # 스타킹노래방
+    "27241177",  # 옵티머스PC
+}
 
 FIXED_STATION_LIMIT = 1
 FIXED_PAGES = 1
@@ -357,6 +364,13 @@ class RecommendationService:
             return None
         return parsed
 
+    @staticmethod
+    def _normalize_activity_intro(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = " ".join(value.split()).strip()
+        return normalized or None
+
     def _extract_photo_urls_from_feature_payload(self, feature_payload: object) -> list[str]:
         if not isinstance(feature_payload, dict):
             return []
@@ -386,6 +400,14 @@ class RecommendationService:
         average_rating = self._to_optional_rating(raw_summary.get("average_rating"))
         rating_count = self._to_optional_positive_int(raw_summary.get("rating_count"))
         return average_rating, rating_count
+
+    def _extract_activity_intro_from_feature_payload(
+        self,
+        feature_payload: object,
+    ) -> str | None:
+        if not isinstance(feature_payload, dict):
+            return None
+        return self._normalize_activity_intro(feature_payload.get("place_intro"))
 
     def _extract_photo_collection_status_from_feature_payload(
         self,
@@ -457,6 +479,7 @@ class RecommendationService:
             naver_rating, naver_rating_count = self._extract_rating_summary_from_feature_payload(
                 row.feature_payload
             )
+            activity_intro = self._extract_activity_intro_from_feature_payload(row.feature_payload)
             photo_collection_status, photo_collection_reason = (
                 self._extract_photo_collection_status_from_feature_payload(
                     row.feature_payload,
@@ -468,6 +491,7 @@ class RecommendationService:
                 "photo_urls": photo_urls,
                 "naver_rating": naver_rating,
                 "naver_rating_count": naver_rating_count,
+                "activity_intro": activity_intro,
                 "photo_collection_status": photo_collection_status,
                 "photo_collection_reason": photo_collection_reason,
                 "last_ingested_at": row.last_ingested_at,
@@ -503,6 +527,7 @@ class RecommendationService:
             photo_collection_reason = feature.get("photo_collection_reason")
             if not isinstance(photo_collection_reason, str):
                 photo_collection_reason = hotplace.photo_collection_reason
+            activity_intro = self._normalize_activity_intro(feature.get("activity_intro"))
 
             enriched.append(
                 hotplace.model_copy(
@@ -517,6 +542,9 @@ class RecommendationService:
                             if naver_rating_count is not None
                             else hotplace.naver_rating_count
                         ),
+                        "activity_intro": activity_intro
+                        if activity_intro is not None
+                        else hotplace.activity_intro,
                         "photo_collection_status": photo_collection_status,
                         "photo_collection_reason": photo_collection_reason,
                     }
@@ -754,8 +782,17 @@ class RecommendationService:
         place_name = str(place_doc.get("place_name", "")).strip()
         if not place_id or not place_name:
             return None
+        if place_id in EXCLUDED_HOTPLACE_KAKAO_PLACE_IDS:
+            return None
         if self._is_irrelevant_place_for_play(place_doc):
             return None
+
+        default_intro = self._build_default_activity_intro(
+            place_name=place_name,
+            source_station=source_station,
+            source_keyword=source_keyword,
+            category_name=place_doc.get("category_name"),
+        )
 
         return MidpointHotplace(
             kakao_place_id=place_id,
@@ -769,7 +806,31 @@ class RecommendationService:
             distance=self._to_optional_int(place_doc.get("distance")),
             source_station=source_station,
             source_keyword=source_keyword,
+            activity_intro=default_intro,
         )
+
+    @classmethod
+    def _build_default_activity_intro(
+        cls,
+        *,
+        place_name: str,
+        source_station: str | None,
+        source_keyword: str | None,
+        category_name: object,
+    ) -> str:
+        station = (source_station or "").strip()
+        keyword = (source_keyword or "").strip()
+        category = category_name.strip() if isinstance(category_name, str) else ""
+
+        if station and keyword:
+            return f"{place_name}은 {station} 근처에서 {keyword}를 즐기기 좋은 장소예요."
+        if station and category:
+            return f"{place_name}은 {station} 인근에서 {category} 분위기를 즐기기 좋아요."
+        if keyword:
+            return f"{place_name}은 {keyword} 중심의 활동을 찾을 때 가볍게 들르기 좋아요."
+        if category:
+            return f"{place_name}은 {category} 카테고리로 추천되는 장소예요."
+        return f"{place_name}은 친구들과 함께 방문하기 좋은 장소예요."
 
     @staticmethod
     def _map_keyword_to_play_category(

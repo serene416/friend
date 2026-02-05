@@ -152,6 +152,18 @@ class RecommendationServiceTests(unittest.TestCase):
             "볼링장",
         )
 
+    def test_build_default_activity_intro_prefers_station_and_keyword(self):
+        intro = RecommendationService._build_default_activity_intro(
+            place_name="테스트 장소",
+            source_station="강남역",
+            source_keyword="보드게임카페",
+            category_name="게임 카페",
+        )
+        self.assertEqual(
+            intro,
+            "테스트 장소은 강남역 근처에서 보드게임카페를 즐기기 좋은 장소예요.",
+        )
+
     def test_midpoint_hotplaces_cache_hit_and_miss(self):
         with patch.dict(
             os.environ,
@@ -182,6 +194,18 @@ class RecommendationServiceTests(unittest.TestCase):
         )
         self.assertEqual(rating, 4.37)
         self.assertEqual(rating_count, 1289)
+
+    def test_extract_activity_intro_from_feature_payload(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        intro = service._extract_activity_intro_from_feature_payload(
+            {"place_intro": "  강남역 근처에서 가볍게 즐기기 좋아요.  "}
+        )
+        self.assertEqual(intro, "강남역 근처에서 가볍게 즐기기 좋아요.")
+
+    def test_extract_activity_intro_from_feature_payload_rejects_invalid_value(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        intro = service._extract_activity_intro_from_feature_payload({"place_intro": {"text": "invalid"}})
+        self.assertIsNone(intro)
 
     def test_extract_photo_collection_status_marks_failed_on_mapping_reason(self):
         service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
@@ -360,6 +384,34 @@ class RecommendationServiceTests(unittest.TestCase):
                 "y": "37.4979",
             },
             source_station="강남",
+            source_keyword="보드게임카페",
+        )
+        self.assertIsNotNone(kept)
+
+    def test_build_hotplace_filters_out_known_unreliable_mapping_places(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        excluded = service._build_hotplace(
+            {
+                "id": "27247109",
+                "place_name": "넷마을",
+                "category_name": "인터넷PC방",
+                "x": "127.3602",
+                "y": "36.3543",
+            },
+            source_station="월평",
+            source_keyword="PC방",
+        )
+        self.assertIsNone(excluded)
+
+        kept = service._build_hotplace(
+            {
+                "id": "play-2",
+                "place_name": "월평 보드게임카페",
+                "category_name": "카페",
+                "x": "127.3602",
+                "y": "36.3543",
+            },
+            source_station="월평",
             source_keyword="보드게임카페",
         )
         self.assertIsNotNone(kept)

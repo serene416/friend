@@ -105,6 +105,7 @@ class MidpointHotplace(BaseModel):
     distance: Optional[int] = None
     source_station: str
     source_keyword: str
+    activity_intro: Optional[str] = None
     representative_image_url: Optional[str] = None
     photo_urls: List[str] = Field(default_factory=list)
     naver_rating: Optional[float] = None
