@@ -13,7 +13,9 @@
       "distribution": "internal",
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://friend-production-a852.up.railway.app"
+        "EXPO_PUBLIC_BACKEND_URL": "https://friend-production-a852.up.railway.app",
+        "EXPO_PUBLIC_KMA_BASE_URL": "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0",
+        "EXPO_PUBLIC_KMA_SERVICE_KEY_ENCODED": "eebc55f27f5f29d0ef69b64094e8e90edfbda7d1664d3cd25acc681064756e74"
       },
       "android": {
         "buildType": "apk"
