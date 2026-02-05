@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi import HTTPException
 
-from app.schemas.recommendation import MidpointHotplaceRequest
+from app.schemas.recommendation import MidpointHotplace, MidpointHotplaceRequest
 from app.services.recommendation_service import (
     PREDEFINED_PLAY_KEYWORDS,
     RecommendationService,
@@ -72,6 +72,27 @@ class RecommendationServiceTests(unittest.TestCase):
     def _run(coro):
         return asyncio.run(coro)
 
+    @staticmethod
+    def _build_hotplace(
+        *,
+        kakao_place_id: str,
+        source_keyword: str,
+        x: float,
+        y: float,
+        rating: float,
+        rating_count: int,
+    ) -> MidpointHotplace:
+        return MidpointHotplace(
+            kakao_place_id=kakao_place_id,
+            place_name=f"{kakao_place_id}-name",
+            x=x,
+            y=y,
+            source_station="강남",
+            source_keyword=source_keyword,
+            naver_rating=rating,
+            naver_rating_count=rating_count,
+        )
+
     def test_midpoint_hotplaces_blocks_when_expected_calls_exceed_guard(self):
         with patch.dict(
             os.environ,
@@ -110,7 +131,26 @@ class RecommendationServiceTests(unittest.TestCase):
             self.assertEqual(len(fake.keyword_queries), len(PREDEFINED_PLAY_KEYWORDS))
             self.assertTrue(all(query.startswith("강남역 ") for query in fake.keyword_queries))
             for keyword in PREDEFINED_PLAY_KEYWORDS:
-                self.assertIn(f"강남역 {keyword}", fake.keyword_queries)
+                expected_query = f"강남역 {service._build_keyword_search_phrase(keyword)}"
+                self.assertIn(expected_query, fake.keyword_queries)
+
+    def test_build_keyword_search_phrase_applies_optimized_overrides(self):
+        self.assertEqual(
+            RecommendationService._build_keyword_search_phrase("방탈출"),
+            "방탈출 카페",
+        )
+        self.assertEqual(
+            RecommendationService._build_keyword_search_phrase("반지공방"),
+            "반지만들기",
+        )
+        self.assertEqual(
+            RecommendationService._build_keyword_search_phrase("소품샵"),
+            "소품샵 구경",
+        )
+        self.assertEqual(
+            RecommendationService._build_keyword_search_phrase("볼링장"),
+            "볼링장",
+        )
 
     def test_midpoint_hotplaces_cache_hit_and_miss(self):
         with patch.dict(
@@ -207,6 +247,122 @@ class RecommendationServiceTests(unittest.TestCase):
             self.assertGreater(response.meta.hotplace_count, 0)
             self.assertEqual(response.meta.actual_kakao_api_call_count, 58)
             mock_enqueue.assert_awaited_once()
+
+    def test_rank_hotplaces_prefers_indoor_category_for_rainy_weather(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        request = MidpointHotplaceRequest(
+            participants=[
+                {"lat": 37.5000, "lng": 127.0000},
+                {"lat": 37.5000, "lng": 127.0600},
+            ],
+            weather_key="비",
+        )
+        indoor = self._build_hotplace(
+            kakao_place_id="indoor-1",
+            source_keyword="볼링장",
+            x=127.0300,
+            y=37.5000,
+            rating=4.4,
+            rating_count=500,
+        )
+        outdoor = self._build_hotplace(
+            kakao_place_id="outdoor-1",
+            source_keyword="인생네컷",
+            x=127.0300,
+            y=37.5000,
+            rating=4.7,
+            rating_count=400,
+        )
+
+        ranked = service._rank_hotplaces([outdoor, indoor], request)
+
+        self.assertEqual(ranked[0].kakao_place_id, "indoor-1")
+        self.assertIsNotNone(ranked[0].ranking_score)
+        self.assertIsNotNone(ranked[1].ranking_score)
+        self.assertGreater(ranked[0].ranking_score, ranked[1].ranking_score)
+
+    def test_rank_hotplaces_prefers_outdoor_friendly_category_for_clear_weather(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        request = MidpointHotplaceRequest(
+            participants=[
+                {"lat": 37.5000, "lng": 127.0000},
+                {"lat": 37.5000, "lng": 127.0600},
+            ],
+            weather_key="맑음",
+        )
+        indoor = self._build_hotplace(
+            kakao_place_id="indoor-1",
+            source_keyword="볼링장",
+            x=127.0300,
+            y=37.5000,
+            rating=4.4,
+            rating_count=500,
+        )
+        outdoor = self._build_hotplace(
+            kakao_place_id="outdoor-1",
+            source_keyword="인생네컷",
+            x=127.0300,
+            y=37.5000,
+            rating=4.7,
+            rating_count=400,
+        )
+
+        ranked = service._rank_hotplaces([indoor, outdoor], request)
+
+        self.assertEqual(ranked[0].kakao_place_id, "outdoor-1")
+        self.assertIsNotNone(ranked[0].ranking_score)
+        self.assertIsNotNone(ranked[1].ranking_score)
+        self.assertGreater(ranked[0].ranking_score, ranked[1].ranking_score)
+
+    def test_cache_key_changes_when_weather_key_changes(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        base_request = _build_request()
+        rainy_request = base_request.model_copy(update={"weather_key": "비"})
+
+        base_key = service._build_cache_key(base_request)
+        rainy_key = service._build_cache_key(rainy_request)
+
+        self.assertNotEqual(base_key, rainy_key)
+
+    def test_build_hotplace_filters_out_interior_related_places(self):
+        service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
+        excluded = service._build_hotplace(
+            {
+                "id": "interior-1",
+                "place_name": "더좋은 인테리어",
+                "category_name": "서비스,산업 > 건설,토목 > 인테리어",
+                "x": "127.0276",
+                "y": "37.4979",
+            },
+            source_station="강남",
+            source_keyword="공방",
+        )
+        self.assertIsNone(excluded)
+        excluded_design = service._build_hotplace(
+            {
+                "id": "design-1",
+                "place_name": "모던디자인",
+                "category_name": "서비스,산업 > 디자인",
+                "x": "127.0276",
+                "y": "37.4979",
+            },
+            source_station="강남",
+            source_keyword="공방",
+        )
+        self.assertIsNone(excluded_design)
+
+        kept = service._build_hotplace(
+            {
+                "id": "play-1",
+                "place_name": "강남 보드게임카페",
+                "category_name": "음식점 > 카페",
+                "x": "127.0276",
+                "y": "37.4979",
+            },
+            source_station="강남",
+            source_keyword="보드게임카페",
+        )
+        self.assertIsNotNone(kept)
 
 
 if __name__ == "__main__":

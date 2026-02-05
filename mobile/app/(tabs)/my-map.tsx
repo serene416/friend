@@ -5,20 +5,57 @@ import { useRecommendationStore } from '@/store/useRecommendationStore';
 import {
     formatDistanceKm,
     getDistanceKmFromCurrentLocation,
-    getHotplaceImageUrl,
     mapSourceKeywordToPlayCategory,
     metersToKm,
 } from '@/utils/recommendation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const PHOTO_COLLECTION_REASON_LABELS: Record<string, string> = {
+    no_candidates: '네이버 장소를 찾지 못했어요',
+    low_confidence: '장소 매칭 정확도가 낮아요',
+    search_error: '검색 중 오류가 발생했어요',
+    missing_place_name: '장소 이름 정보가 부족해요',
+    missing_naver_place_id: '네이버 장소 ID를 찾지 못했어요',
+    crawler_error: '크롤러 실행 중 오류가 발생했어요',
+    naver_target_unavailable: '대상 페이지 접근이 불가능해요',
+    crawl_skipped: '크롤러가 대상을 건너뛰었어요',
+    crawler_partial_error: '수집 중 일부 단계에서 오류가 있었어요',
+};
+
+const getPhotoPlaceholderMeta = (status?: string | null, reason?: string | null) => {
+    if (status === 'FAILED') {
+        return {
+            icon: 'alert-circle-outline' as const,
+            iconColor: '#DC2626',
+            title: '사진 수집 실패',
+            subtitle: reason ? PHOTO_COLLECTION_REASON_LABELS[reason] ?? `실패 사유: ${reason}` : null,
+            failed: true,
+        };
+    }
+    if (status === 'EMPTY') {
+        return {
+            icon: 'image-outline' as const,
+            iconColor: '#9DA3AF',
+            title: '수집된 장소 사진이 없어요',
+            subtitle: null,
+            failed: false,
+        };
+    }
+    return {
+        icon: 'clock-outline' as const,
+        iconColor: '#9DA3AF',
+        title: '사진 수집 대기 중',
+        subtitle: null,
+        failed: false,
+    };
+};
+
 export default function MyMapScreen() {
-    const router = useRouter();
     const { favorites } = useFavoriteStore();
     const recommendation = useRecommendationStore((state) => state.recommendation);
     const getHotplaceById = useRecommendationStore((state) => state.getHotplaceById);
@@ -70,13 +107,15 @@ export default function MyMapScreen() {
         return {
             id: hotplace.kakao_place_id,
             title: hotplace.place_name,
-            image: getHotplaceImageUrl(hotplace.kakao_place_id),
+            image: hotplace.representative_image_url ?? hotplace.photo_urls?.[0] ?? null,
             distanceLabel: formatDistanceKm(distanceKm),
             category: mapSourceKeywordToPlayCategory(hotplace.source_keyword, hotplace.category_name),
             address: hotplace.address_name || hotplace.road_address_name || '주소 정보 없음',
             phone: hotplace.phone || '전화번호 정보 없음',
             sourceStation: hotplace.source_station,
             sourceKeyword: hotplace.source_keyword,
+            photoCollectionStatus: hotplace.photo_collection_status ?? 'PENDING',
+            photoCollectionReason: hotplace.photo_collection_reason ?? null,
         };
     }, [selectedMarkerId, recommendation, getHotplaceById]);
 
@@ -123,6 +162,10 @@ export default function MyMapScreen() {
             },
         ]
         : [];
+    const photoPlaceholder = getPhotoPlaceholderMeta(
+        selectedItem?.photoCollectionStatus,
+        selectedItem?.photoCollectionReason
+    );
 
     return (
         <SafeAreaView style={styles.container}>
@@ -152,7 +195,35 @@ export default function MyMapScreen() {
                     >
                         <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
                             {/* Hero Image */}
-                            <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
+                            {selectedItem.image ? (
+                                <Image source={{ uri: selectedItem.image }} style={styles.sheetImage} />
+                            ) : (
+                                <View style={styles.sheetImagePlaceholder}>
+                                    <MaterialCommunityIcons
+                                        name={photoPlaceholder.icon}
+                                        size={32}
+                                        color={photoPlaceholder.iconColor}
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.sheetImagePlaceholderText,
+                                            photoPlaceholder.failed && styles.sheetImagePlaceholderTextFailed,
+                                        ]}
+                                    >
+                                        {photoPlaceholder.title}
+                                    </Text>
+                                    {photoPlaceholder.subtitle ? (
+                                        <Text
+                                            style={[
+                                                styles.sheetImagePlaceholderSubText,
+                                                photoPlaceholder.failed && styles.sheetImagePlaceholderSubTextFailed,
+                                            ]}
+                                        >
+                                            {photoPlaceholder.subtitle}
+                                        </Text>
+                                    ) : null}
+                                </View>
+                            )}
 
                             <View style={styles.sheetInfo}>
                                 {/* Title & Heart */}
@@ -274,6 +345,33 @@ const styles = StyleSheet.create({
         width: '100%',
         height: 200,
         backgroundColor: '#eee',
+    },
+    sheetImagePlaceholder: {
+        width: '100%',
+        height: 200,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    sheetImagePlaceholderText: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontFamily: 'Pretendard-Medium',
+    },
+    sheetImagePlaceholderTextFailed: {
+        color: '#B91C1C',
+        fontFamily: 'Pretendard-Bold',
+    },
+    sheetImagePlaceholderSubText: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontFamily: 'Pretendard-Medium',
+        textAlign: 'center',
+        paddingHorizontal: 24,
+    },
+    sheetImagePlaceholderSubTextFailed: {
+        color: '#991B1B',
     },
     sheetInfo: {
         padding: 20,

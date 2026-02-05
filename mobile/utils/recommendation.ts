@@ -2,8 +2,17 @@ import { Coordinate, MidpointHotplace } from '@/types/recommendation';
 
 const EARTH_RADIUS_KM = 6371;
 
+export const PLAY_CATEGORIES = [
+  '액티브 & 스포츠',
+  '게임 & 소셜',
+  '창작 & 클래스',
+  '힐링 & 테마 카페',
+  '문화 & 예술',
+  '기록 & 쇼핑',
+] as const;
+
 const PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: Record<string, string[]> = {
-  '실내 액티비티 & 스포츠': [
+  '액티브 & 스포츠': [
     '볼링장',
     '당구장',
     '포켓볼',
@@ -18,7 +27,7 @@ const PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: Record<string, string[]> = {
     '탁구장',
     '풋살장',
   ],
-  '게임 & 지적 유희': [
+  '게임 & 소셜': [
     '방탈출',
     '보드게임카페',
     '코인노래방',
@@ -30,18 +39,17 @@ const PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: Record<string, string[]> = {
     '마작카페',
     '레이싱카페',
   ],
-  '문화 & 예술': [
-    '영화관',
-    '미술관',
-    '전시회',
-    '박물관',
-    '소극장',
-    '독립영화관',
-    '팝업스토어',
-    '북카페',
-    'LP바',
+  '창작 & 클래스': [
+    '공방',
+    '향수공방',
+    '도자기공방',
+    '가죽공방',
+    '베이킹클래스',
+    '원데이클래스',
+    '반지공방',
+    '목공소',
   ],
-  '이색 테마 카페': [
+  '힐링 & 테마 카페': [
     '만화카페',
     '룸카페',
     '고양이카페',
@@ -51,16 +59,17 @@ const PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: Record<string, string[]> = {
     '드로잉카페',
     '심리상담카페',
     '족욕카페',
+    '북카페',
+    'LP바',
   ],
-  '체험 & 원데이 클래스': [
-    '공방',
-    '향수공방',
-    '도자기공방',
-    '가죽공방',
-    '베이킹클래스',
-    '원데이클래스',
-    '반지공방',
-    '목공소',
+  '문화 & 예술': [
+    '영화관',
+    '미술관',
+    '전시회',
+    '박물관',
+    '소극장',
+    '독립영화관',
+    '팝업스토어',
   ],
   '기록 & 쇼핑': [
     '인생네컷',

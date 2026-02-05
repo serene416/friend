@@ -9,7 +9,6 @@ import { useRecommendationStore } from '../store/useRecommendationStore';
 import {
   formatDistanceKm,
   getDistanceKmFromCurrentLocation,
-  getHotplaceImageUrl,
   mapSourceKeywordToPlayCategory,
   metersToKm,
 } from '../utils/recommendation';
@@ -18,13 +17,55 @@ interface FavoriteHotplaceItem {
   kind: 'hotplace';
   id: string;
   title: string;
-  image: string;
+  image?: string | null;
   distanceLabel: string;
   category: string;
   sourceKeyword: string;
+  photoCollectionStatus?: 'PENDING' | 'READY' | 'EMPTY' | 'FAILED';
+  photoCollectionReason?: string | null;
 }
 
 type FavoriteItem = (Activity & { kind: 'mock' }) | FavoriteHotplaceItem;
+
+const PHOTO_COLLECTION_REASON_LABELS: Record<string, string> = {
+  no_candidates: '네이버 장소를 찾지 못했어요',
+  low_confidence: '장소 매칭 정확도가 낮아요',
+  search_error: '검색 중 오류가 발생했어요',
+  missing_place_name: '장소 이름 정보가 부족해요',
+  missing_naver_place_id: '네이버 장소 ID를 찾지 못했어요',
+  crawler_error: '크롤러 실행 중 오류가 발생했어요',
+  naver_target_unavailable: '대상 페이지 접근이 불가능해요',
+  crawl_skipped: '크롤러가 대상을 건너뛰었어요',
+  crawler_partial_error: '수집 중 일부 단계에서 오류가 있었어요',
+};
+
+const getPhotoPlaceholderMeta = (
+  status: FavoriteHotplaceItem['photoCollectionStatus'],
+  reason: FavoriteHotplaceItem['photoCollectionReason']
+) => {
+  if (status === 'FAILED') {
+    return {
+      icon: 'alert-circle-outline' as const,
+      iconColor: '#DC2626',
+      title: '사진 수집 실패',
+      subtitle: reason ? PHOTO_COLLECTION_REASON_LABELS[reason] ?? `실패 사유: ${reason}` : null,
+    };
+  }
+  if (status === 'EMPTY') {
+    return {
+      icon: 'image-outline' as const,
+      iconColor: '#9DA3AF',
+      title: '수집된 장소 사진이 없어요',
+      subtitle: null,
+    };
+  }
+  return {
+    icon: 'clock-outline' as const,
+    iconColor: '#9DA3AF',
+    title: '사진 수집 대기 중',
+    subtitle: null,
+  };
+};
 
 export default function FavoritesScreen() {
   const router = useRouter();
@@ -61,10 +102,12 @@ export default function FavoritesScreen() {
           kind: 'hotplace' as const,
           id: hotplace.kakao_place_id,
           title: hotplace.place_name,
-          image: getHotplaceImageUrl(hotplace.kakao_place_id),
+          image: hotplace.representative_image_url ?? hotplace.photo_urls?.[0] ?? null,
           distanceLabel: formatDistanceKm(distanceKm),
           category: mapSourceKeywordToPlayCategory(hotplace.source_keyword, hotplace.category_name),
           sourceKeyword: hotplace.source_keyword,
+          photoCollectionStatus: hotplace.photo_collection_status ?? 'PENDING',
+          photoCollectionReason: hotplace.photo_collection_reason ?? null,
         };
       })
       .filter((item): item is FavoriteItem => item !== null);
@@ -73,12 +116,34 @@ export default function FavoritesScreen() {
   const renderItem = ({ item }: { item: FavoriteItem }) => {
     if (item.kind === 'hotplace') {
       const tags = Array.from(new Set([item.category, item.sourceKeyword].filter(Boolean)));
+      const placeholder = getPhotoPlaceholderMeta(item.photoCollectionStatus, item.photoCollectionReason);
+      const isFailedPhotoCollection = item.photoCollectionStatus === 'FAILED';
       return (
         <TouchableOpacity
           style={styles.card}
           onPress={() => router.push(`/activity-detail?id=${encodeURIComponent(item.id)}`)}
         >
-          <Image source={{ uri: item.image }} style={styles.cardImage} />
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.cardImage} />
+          ) : (
+            <View style={styles.cardImagePlaceholder}>
+              <MaterialCommunityIcons name={placeholder.icon} size={32} color={placeholder.iconColor} />
+              <Text style={[
+                styles.cardImagePlaceholderText,
+                isFailedPhotoCollection && styles.cardImagePlaceholderTextFailed,
+              ]}>
+                {placeholder.title}
+              </Text>
+              {placeholder.subtitle ? (
+                <Text style={[
+                  styles.cardImagePlaceholderSubText,
+                  isFailedPhotoCollection && styles.cardImagePlaceholderSubTextFailed,
+                ]}>
+                  {placeholder.subtitle}
+                </Text>
+              ) : null}
+            </View>
+          )}
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>{item.title}</Text>
@@ -187,6 +252,35 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     backgroundColor: '#eee',
+  },
+  cardImagePlaceholder: {
+    width: '100%',
+    height: 180,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  cardImagePlaceholderText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontFamily: 'Pretendard-Medium',
+  },
+  cardImagePlaceholderTextFailed: {
+    color: '#B91C1C',
+    fontFamily: 'Pretendard-Bold',
+  },
+  cardImagePlaceholderSubText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'Pretendard-Medium',
+    textAlign: 'center',
+  },
+  cardImagePlaceholderSubTextFailed: {
+    color: '#991B1B',
   },
   cardContent: { padding: 15 },
   cardHeader: {

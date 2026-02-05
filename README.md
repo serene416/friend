@@ -36,6 +36,9 @@ docker-compose up --build
 Kakao Local API setup for midpoint hotplace recommendations:
 - Set `KAKAO_REST_API_KEY=<your_kakao_rest_api_key>` in your backend environment (`.env` or Docker env).
 - Optional debug logs: set `MIDPOINT_LOG_FULL_KAKAO_RESULTS=true` to print full Kakao station/keyword documents and mapped category/activity info in backend logs.
+- Midpoint ranking uses a weighted score of participant distance/fairness, weather suitability, and Naver rating confidence.
+  - Send optional `weather_key` (`맑음`, `구름많음`, `흐림`, `비`, `눈`) in `POST /api/v1/recommend/midpoint-hotplaces`.
+  - Instagram trend signals are intentionally excluded for now.
 - Midpoint ingestion enqueue is enabled by default in `docker-compose.yml` via `MIDPOINT_ENABLE_INGESTION_ENQUEUE=${MIDPOINT_ENABLE_INGESTION_ENQUEUE:-true}`.
   - Set `MIDPOINT_ENABLE_INGESTION_ENQUEUE=false` to disable async Stage 2 crawling.
 - Optional dedicated Celery broker URL: set `CELERY_BROKER_URL=redis://...` (if omitted, services fall back to `REDIS_URL`).

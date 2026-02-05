@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 import logging
+import math
 import os
 import random
 import time
@@ -31,7 +32,7 @@ from app.services.ingestion_service import create_ingestion_job_from_hotplaces
 logger = logging.getLogger("app.recommendation")
 
 PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: dict[str, list[str]] = {
-    "실내 액티비티 & 스포츠": [
+    "액티브 & 스포츠": [
         "볼링장",
         "당구장",
         "포켓볼",
@@ -46,7 +47,7 @@ PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: dict[str, list[str]] = {
         "탁구장",
         "풋살장",
     ],
-    "게임 & 지적 유희": [
+    "게임 & 소셜": [
         "방탈출",
         "보드게임카페",
         "코인노래방",
@@ -58,18 +59,17 @@ PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: dict[str, list[str]] = {
         "마작카페",
         "레이싱카페",
     ],
-    "문화 & 예술": [
-        "영화관",
-        "미술관",
-        "전시회",
-        "박물관",
-        "소극장",
-        "독립영화관",
-        "팝업스토어",
-        "북카페",
-        "LP바",
+    "창작 & 클래스": [
+        "공방",
+        "향수공방",
+        "도자기공방",
+        "가죽공방",
+        "베이킹클래스",
+        "원데이클래스",
+        "반지공방",
+        "목공소",
     ],
-    "이색 테마 카페": [
+    "힐링 & 테마 카페": [
         "만화카페",
         "룸카페",
         "고양이카페",
@@ -79,16 +79,17 @@ PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY: dict[str, list[str]] = {
         "드로잉카페",
         "심리상담카페",
         "족욕카페",
+        "북카페",
+        "LP바",
     ],
-    "체험 & 원데이 클래스": [
-        "공방",
-        "향수공방",
-        "도자기공방",
-        "가죽공방",
-        "베이킹클래스",
-        "원데이클래스",
-        "반지공방",
-        "목공소",
+    "문화 & 예술": [
+        "영화관",
+        "미술관",
+        "전시회",
+        "박물관",
+        "소극장",
+        "독립영화관",
+        "팝업스토어",
     ],
     "기록 & 쇼핑": [
         "인생네컷",
@@ -117,6 +118,36 @@ KEYWORD_TO_PLAY_CATEGORY: dict[str, str] = {
     for category, keywords in PREDEFINED_PLAY_KEYWORDS_BY_CATEGORY.items()
     for keyword in keywords
 }
+KEYWORD_TO_SEARCH_PHRASE: dict[str, str] = {
+    _normalize_keyword("방탈출"): "방탈출 카페",
+    _normalize_keyword("보드게임카페"): "보드게임 카페",
+    _normalize_keyword("공방"): "공방 체험",
+    _normalize_keyword("반지공방"): "반지만들기",
+    _normalize_keyword("강아지카페"): "애견카페",
+    _normalize_keyword("만화카페"): "이색카페 만화카페",
+    _normalize_keyword("소극장"): "소극장 공연",
+    _normalize_keyword("소품샵"): "소품샵 구경",
+}
+IRRELEVANT_PLACE_STRONG_FILTER_TERMS = {
+    "인테리어",
+    "종합장식",
+    "설비",
+    "공사",
+    "interior",
+}
+IRRELEVANT_PLACE_DESIGN_TERMS = {"디자인", "design"}
+IRRELEVANT_PLACE_DESIGN_CONTEXT_TERMS = {
+    "건축",
+    "건설",
+    "토목",
+    "시공",
+    "리모델링",
+    "집수리",
+    "도배",
+    "장판",
+    "타일",
+    "샷시",
+}
 
 FIXED_STATION_LIMIT = 1
 FIXED_PAGES = 1
@@ -128,6 +159,86 @@ PHOTO_COLLECTION_FAILURE_REASONS = {
     "missing_naver_place_id",
     "crawler_error",
     "naver_target_unavailable",
+}
+
+EARTH_RADIUS_KM = 6371.0
+DISTANCE_DECAY_KM = 2.5
+DISTANCE_FAIRNESS_DECAY_KM = 1.0
+RATING_BASELINE = 3.5
+RATING_SPAN = 1.5
+RATING_CONFIDENCE_MAX_COUNT = 2000
+BAYESIAN_PRIOR_MEAN = 4.2
+BAYESIAN_PRIOR_WEIGHT = 80.0
+NEUTRAL_COMPONENT_SCORE = 0.5
+RAINY_WEATHER_KEYS = {"비", "눈"}
+SUPPORTED_WEATHER_KEYS = {"맑음", "구름많음", "흐림", "비", "눈", "default"}
+DEFAULT_RANKING_WEIGHTS = {
+    "distance": 0.35,
+    "rating": 0.30,
+    "weather": 0.25,
+    "confidence": 0.10,
+}
+RAINY_RANKING_WEIGHTS = {
+    "distance": 0.30,
+    "rating": 0.25,
+    "weather": 0.35,
+    "confidence": 0.10,
+}
+WEATHER_CATEGORY_SUITABILITY: dict[str, dict[str, float]] = {
+    "맑음": {
+        "액티브 & 스포츠": 0.78,
+        "게임 & 소셜": 0.76,
+        "문화 & 예술": 0.84,
+        "힐링 & 테마 카페": 0.86,
+        "창작 & 클래스": 0.82,
+        "기록 & 쇼핑": 0.90,
+        "기타": 0.75,
+    },
+    "구름많음": {
+        "액티브 & 스포츠": 0.82,
+        "게임 & 소셜": 0.82,
+        "문화 & 예술": 0.85,
+        "힐링 & 테마 카페": 0.87,
+        "창작 & 클래스": 0.84,
+        "기록 & 쇼핑": 0.84,
+        "기타": 0.76,
+    },
+    "흐림": {
+        "액티브 & 스포츠": 0.86,
+        "게임 & 소셜": 0.86,
+        "문화 & 예술": 0.88,
+        "힐링 & 테마 카페": 0.88,
+        "창작 & 클래스": 0.85,
+        "기록 & 쇼핑": 0.78,
+        "기타": 0.75,
+    },
+    "비": {
+        "액티브 & 스포츠": 0.95,
+        "게임 & 소셜": 0.95,
+        "문화 & 예술": 0.90,
+        "힐링 & 테마 카페": 0.92,
+        "창작 & 클래스": 0.88,
+        "기록 & 쇼핑": 0.70,
+        "기타": 0.62,
+    },
+    "눈": {
+        "액티브 & 스포츠": 0.95,
+        "게임 & 소셜": 0.95,
+        "문화 & 예술": 0.91,
+        "힐링 & 테마 카페": 0.92,
+        "창작 & 클래스": 0.88,
+        "기록 & 쇼핑": 0.66,
+        "기타": 0.60,
+    },
+    "default": {
+        "액티브 & 스포츠": NEUTRAL_COMPONENT_SCORE,
+        "게임 & 소셜": NEUTRAL_COMPONENT_SCORE,
+        "문화 & 예술": NEUTRAL_COMPONENT_SCORE,
+        "힐링 & 테마 카페": NEUTRAL_COMPONENT_SCORE,
+        "창작 & 클래스": NEUTRAL_COMPONENT_SCORE,
+        "기록 & 쇼핑": NEUTRAL_COMPONENT_SCORE,
+        "기타": NEUTRAL_COMPONENT_SCORE,
+    },
 }
 
 
@@ -477,6 +588,45 @@ class RecommendationService:
         return station_name.split()[0]
 
     @staticmethod
+    def _build_keyword_search_phrase(keyword: str) -> str:
+        normalized = _normalize_keyword(keyword)
+        return KEYWORD_TO_SEARCH_PHRASE.get(normalized, keyword)
+
+    @staticmethod
+    def _normalize_place_filter_text(raw_text: object | None) -> str:
+        if not isinstance(raw_text, str):
+            return ""
+        return "".join(raw_text.strip().lower().split())
+
+    @classmethod
+    def _is_irrelevant_place_for_play(cls, place_doc: dict) -> bool:
+        place_name = cls._normalize_place_filter_text(place_doc.get("place_name"))
+        category_name = cls._normalize_place_filter_text(place_doc.get("category_name"))
+        address_name = cls._normalize_place_filter_text(place_doc.get("address_name"))
+        road_address_name = cls._normalize_place_filter_text(place_doc.get("road_address_name"))
+
+        searchable = " ".join(
+            token
+            for token in (place_name, category_name, address_name, road_address_name)
+            if token
+        )
+        if any(term in searchable for term in IRRELEVANT_PLACE_STRONG_FILTER_TERMS):
+            return True
+
+        searchable_name_category = " ".join(
+            token for token in (place_name, category_name) if token
+        )
+        has_design_term = any(term in searchable_name_category for term in IRRELEVANT_PLACE_DESIGN_TERMS)
+        if not has_design_term:
+            return False
+
+        if any(term in searchable_name_category for term in IRRELEVANT_PLACE_STRONG_FILTER_TERMS):
+            return True
+        if any(term in searchable_name_category for term in IRRELEVANT_PLACE_DESIGN_CONTEXT_TERMS):
+            return True
+        return category_name.endswith("디자인") or place_name.endswith("디자인")
+
+    @staticmethod
     def _to_float(value: object | None, default: float = 0.0) -> float:
         try:
             return float(value)
@@ -518,6 +668,7 @@ class RecommendationService:
             "station_limit": self.fixed_station_limit,
             "pages": self.fixed_pages,
             "keywords": PREDEFINED_PLAY_KEYWORDS,
+            "weather_key": self._normalize_weather_key(request.weather_key),
         }
         serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
@@ -603,6 +754,8 @@ class RecommendationService:
         place_name = str(place_doc.get("place_name", "")).strip()
         if not place_id or not place_name:
             return None
+        if self._is_irrelevant_place_for_play(place_doc):
+            return None
 
         return MidpointHotplace(
             kakao_place_id=place_id,
@@ -629,6 +782,269 @@ class RecommendationService:
                 return mapped
         fallback = (fallback_category or "").strip()
         return fallback or "기타"
+
+    @staticmethod
+    def _clamp_unit(value: float) -> float:
+        if value < 0:
+            return 0.0
+        if value > 1:
+            return 1.0
+        return value
+
+    @staticmethod
+    def _normalize_weather_key(raw_weather_key: str | None) -> str | None:
+        if raw_weather_key is None:
+            return None
+        normalized = raw_weather_key.strip()
+        if not normalized:
+            return None
+        if normalized in {"빗방울", "비/눈", "빗방울눈날림", "소나기"}:
+            return "비"
+        if normalized in {"눈날림"}:
+            return "눈"
+        if normalized not in SUPPORTED_WEATHER_KEYS:
+            return "default"
+        return normalized
+
+    @staticmethod
+    def _normalize_activity_category_for_weather(activity_category: str) -> str:
+        if activity_category in WEATHER_CATEGORY_SUITABILITY["default"]:
+            return activity_category
+
+        compact = activity_category.replace(" ", "").lower()
+        if any(
+            token in compact
+            for token in (
+                "볼링",
+                "당구",
+                "클라이밍",
+                "스크린",
+                "풋살",
+                "탁구",
+                "양궁",
+                "사격",
+                "스케이트",
+                "아이스링크",
+                "스포츠",
+            )
+        ):
+            return "액티브 & 스포츠"
+        if any(
+            token in compact
+            for token in (
+                "방탈출",
+                "보드게임",
+                "노래",
+                "코인",
+                "pc",
+                "오락",
+                "가챠",
+                "홀덤",
+                "마작",
+                "게임",
+            )
+        ):
+            return "게임 & 소셜"
+        if any(token in compact for token in ("영화", "미술", "박물", "전시", "소극장", "극장", "아트")):
+            return "문화 & 예술"
+        if any(
+            token in compact
+            for token in ("공방", "클래스", "체험", "베이킹", "향수", "도자기", "가죽", "목공", "반지")
+        ):
+            return "창작 & 클래스"
+        if any(
+            token in compact
+            for token in ("인생네컷", "셀프사진", "포토", "소품", "편집샵", "쇼핑", "플리마켓")
+        ):
+            return "기록 & 쇼핑"
+        if "카페" in compact:
+            return "힐링 & 테마 카페"
+        return "기타"
+
+    @staticmethod
+    def _haversine_distance_km(
+        from_lat: float,
+        from_lng: float,
+        to_lat: float,
+        to_lng: float,
+    ) -> float:
+        lat_delta = math.radians(to_lat - from_lat)
+        lng_delta = math.radians(to_lng - from_lng)
+        from_lat_rad = math.radians(from_lat)
+        to_lat_rad = math.radians(to_lat)
+        haversine = (
+            math.sin(lat_delta / 2) ** 2
+            + math.cos(from_lat_rad) * math.cos(to_lat_rad) * (math.sin(lng_delta / 2) ** 2)
+        )
+        haversine = max(0.0, min(1.0, haversine))
+        arc = 2 * math.atan2(math.sqrt(haversine), math.sqrt(1 - haversine))
+        return EARTH_RADIUS_KM * arc
+
+    def _calculate_distance_score(
+        self,
+        hotplace: MidpointHotplace,
+        request: MidpointHotplaceRequest,
+    ) -> tuple[float, float | None, float | None]:
+        if not (-90 <= hotplace.y <= 90 and -180 <= hotplace.x <= 180):
+            return NEUTRAL_COMPONENT_SCORE, None, None
+        if abs(hotplace.x) < 1e-9 and abs(hotplace.y) < 1e-9:
+            return NEUTRAL_COMPONENT_SCORE, None, None
+
+        participant_distances = [
+            self._haversine_distance_km(
+                from_lat=participant.lat,
+                from_lng=participant.lng,
+                to_lat=hotplace.y,
+                to_lng=hotplace.x,
+            )
+            for participant in request.participants
+        ]
+        if not participant_distances:
+            return NEUTRAL_COMPONENT_SCORE, None, None
+
+        avg_distance = sum(participant_distances) / len(participant_distances)
+        if len(participant_distances) > 1:
+            variance = sum(
+                (distance_km - avg_distance) ** 2 for distance_km in participant_distances
+            ) / len(participant_distances)
+            distance_std = math.sqrt(variance)
+        else:
+            distance_std = 0.0
+
+        score = math.exp(-avg_distance / DISTANCE_DECAY_KM) * math.exp(
+            -distance_std / DISTANCE_FAIRNESS_DECAY_KM
+        )
+        return self._clamp_unit(score), avg_distance, distance_std
+
+    def _calculate_rating_score_and_confidence(
+        self,
+        hotplace: MidpointHotplace,
+    ) -> tuple[float, float, float | None]:
+        if hotplace.naver_rating is None:
+            return NEUTRAL_COMPONENT_SCORE, NEUTRAL_COMPONENT_SCORE, None
+
+        rating_count = max(hotplace.naver_rating_count or 0, 0)
+        bayesian_rating = (
+            (rating_count / (rating_count + BAYESIAN_PRIOR_WEIGHT)) * hotplace.naver_rating
+            + (BAYESIAN_PRIOR_WEIGHT / (rating_count + BAYESIAN_PRIOR_WEIGHT))
+            * BAYESIAN_PRIOR_MEAN
+        )
+        rating_score = self._clamp_unit((bayesian_rating - RATING_BASELINE) / RATING_SPAN)
+        confidence_score = (
+            self._clamp_unit(math.log1p(rating_count) / math.log1p(RATING_CONFIDENCE_MAX_COUNT))
+            if hotplace.naver_rating_count is not None
+            else NEUTRAL_COMPONENT_SCORE
+        )
+        return rating_score, confidence_score, bayesian_rating
+
+    def _calculate_weather_suitability_score(
+        self,
+        weather_key: str | None,
+        activity_category: str,
+    ) -> float:
+        if weather_key is None:
+            return NEUTRAL_COMPONENT_SCORE
+        category_key = self._normalize_activity_category_for_weather(activity_category)
+        weather_matrix = WEATHER_CATEGORY_SUITABILITY.get(
+            weather_key, WEATHER_CATEGORY_SUITABILITY["default"]
+        )
+        score = weather_matrix.get(
+            category_key, weather_matrix.get("기타", NEUTRAL_COMPONENT_SCORE)
+        )
+        return self._clamp_unit(score)
+
+    @staticmethod
+    def _resolve_ranking_weights(weather_key: str | None) -> dict[str, float]:
+        return RAINY_RANKING_WEIGHTS if weather_key in RAINY_WEATHER_KEYS else DEFAULT_RANKING_WEIGHTS
+
+    def _build_ranking_reasons(
+        self,
+        hotplace: MidpointHotplace,
+        *,
+        weather_key: str | None,
+        activity_category: str,
+        weather_score: float,
+        avg_distance_km: float | None,
+    ) -> list[str]:
+        reasons: list[str] = []
+        if avg_distance_km is not None:
+            reasons.append(f"참여자 평균 이동거리 {avg_distance_km:.1f}km")
+
+        if weather_key and weather_key != "default" and weather_score >= 0.85:
+            reasons.append(f"{weather_key} 날씨에 잘 맞는 {activity_category}")
+
+        if hotplace.naver_rating is not None:
+            if hotplace.naver_rating_count is not None:
+                reasons.append(
+                    "네이버 평점 "
+                    f"{hotplace.naver_rating:.1f}점 ({hotplace.naver_rating_count:,}명)"
+                )
+            else:
+                reasons.append(f"네이버 평점 {hotplace.naver_rating:.1f}점")
+
+        if not reasons:
+            return ["거리·날씨·별점 균형 점수"]
+        return reasons[:3]
+
+    def _rank_hotplaces(
+        self,
+        hotplaces: list[MidpointHotplace],
+        request: MidpointHotplaceRequest,
+    ) -> list[MidpointHotplace]:
+        if not hotplaces:
+            return hotplaces
+
+        weather_key = self._normalize_weather_key(request.weather_key)
+        weights = self._resolve_ranking_weights(weather_key)
+        ranked_hotplaces: list[MidpointHotplace] = []
+
+        for hotplace in hotplaces:
+            activity_category = self._map_keyword_to_play_category(
+                hotplace.source_keyword,
+                hotplace.category_name,
+            )
+            distance_score, avg_distance_km, _distance_std_km = self._calculate_distance_score(
+                hotplace,
+                request,
+            )
+            rating_score, confidence_score, _bayesian_rating = (
+                self._calculate_rating_score_and_confidence(hotplace)
+            )
+            weather_score = self._calculate_weather_suitability_score(
+                weather_key,
+                activity_category,
+            )
+            final_score = self._clamp_unit(
+                (weights["distance"] * distance_score)
+                + (weights["rating"] * rating_score)
+                + (weights["weather"] * weather_score)
+                + (weights["confidence"] * confidence_score)
+            )
+            ranking_reasons = self._build_ranking_reasons(
+                hotplace,
+                weather_key=weather_key,
+                activity_category=activity_category,
+                weather_score=weather_score,
+                avg_distance_km=avg_distance_km,
+            )
+            ranked_hotplaces.append(
+                hotplace.model_copy(
+                    update={
+                        "ranking_score": round(final_score, 4),
+                        "ranking_reasons": ranking_reasons,
+                    }
+                )
+            )
+
+        ranked_hotplaces.sort(
+            key=lambda item: (
+                -(item.ranking_score or 0.0),
+                item.distance is None,
+                item.distance if item.distance is not None else float("inf"),
+                item.kakao_place_id,
+            )
+        )
+        return ranked_hotplaces
 
     async def _maybe_enqueue_ingestion_job(
         self,
@@ -709,7 +1125,8 @@ class RecommendationService:
         semaphore: asyncio.Semaphore,
     ) -> tuple[str, str, list[dict]]:
         query_station_name = self._build_station_keyword(station.original_name)
-        query = f"{query_station_name} {keyword}".strip()
+        keyword_search_phrase = self._build_keyword_search_phrase(keyword)
+        query = f"{query_station_name} {keyword_search_phrase}".strip()
         try:
             async with semaphore:
                 documents = await self.kakao_local_service.search_places_by_keyword(
@@ -732,20 +1149,22 @@ class RecommendationService:
             raise
 
         logger.info(
-            "Keyword search success: query=%s station=%s keyword=%s page=%s result_count=%s sample=%s",
+            "Keyword search success: query=%s station=%s keyword=%s phrase=%s page=%s result_count=%s sample=%s",
             query,
             station.original_name,
             keyword,
+            keyword_search_phrase,
             page,
             len(documents),
             [doc.get("place_name") for doc in documents[:3]],
         )
         if self.log_full_kakao_results:
             logger.info(
-                "KAKAO_RAW_KEYWORD_RESULTS query=%s station=%s keyword=%s page=%s documents=%s",
+                "KAKAO_RAW_KEYWORD_RESULTS query=%s station=%s keyword=%s phrase=%s page=%s documents=%s",
                 query,
                 station.original_name,
                 keyword,
+                keyword_search_phrase,
                 page,
                 self._to_json_log(documents),
             )
@@ -759,6 +1178,7 @@ class RecommendationService:
         applied_keywords = PREDEFINED_PLAY_KEYWORDS
         applied_station_limit = self.fixed_station_limit
         applied_pages = self.fixed_pages
+        normalized_weather_key = self._normalize_weather_key(request.weather_key)
         expected_kakao_calls = self._calculate_expected_kakao_calls(
             station_limit=applied_station_limit,
             keyword_count=len(applied_keywords),
@@ -798,15 +1218,19 @@ class RecommendationService:
                     "expected_kakao_api_call_count": expected_kakao_calls,
                     "actual_kakao_api_call_count": 0,
                     "kakao_api_call_count": 0,
+                    "ranking_weather_key": normalized_weather_key,
                 }
             )
             cached_hotplaces = await self._attach_hotplace_features(cached_response.hotplaces, session)
-            return cached_response.model_copy(update={"meta": cached_meta, "hotplaces": cached_hotplaces})
+            ranked_hotplaces = self._rank_hotplaces(cached_hotplaces, request)
+            return cached_response.model_copy(
+                update={"meta": cached_meta, "hotplaces": ranked_hotplaces}
+            )
 
         logger.info(
             "Midpoint hotplace request: participants=%s midpoint=(%.6f, %.6f) station_radius=%s "
             "requested_station_limit=%s applied_station_limit=%s place_radius=%s requested_keywords=%s "
-            "applied_keyword_count=%s size=%s requested_pages=%s applied_pages=%s expected_calls=%s",
+            "applied_keyword_count=%s size=%s requested_pages=%s applied_pages=%s expected_calls=%s weather_key=%s",
             len(request.participants),
             midpoint.lat,
             midpoint.lng,
@@ -820,6 +1244,7 @@ class RecommendationService:
             request.pages,
             applied_pages,
             expected_kakao_calls,
+            normalized_weather_key,
         )
         if request.keywords != applied_keywords:
             logger.info(
@@ -881,6 +1306,7 @@ class RecommendationService:
                         executed_keyword_count=0,
                         expected_kakao_api_call_count=expected_kakao_calls,
                         actual_kakao_api_call_count=actual_kakao_calls,
+                        ranking_weather_key=normalized_weather_key,
                         cache_hit=False,
                         cache_backend=cache_backend,
                         cache_ttl_seconds=self.cache_ttl_seconds,
@@ -939,9 +1365,7 @@ class RecommendationService:
 
         hotplaces = list(deduped_hotplaces.values())
         hotplaces = await self._attach_hotplace_features(hotplaces, session)
-        hotplaces.sort(
-            key=lambda item: (item.distance is None, item.distance if item.distance is not None else 0)
-        )
+        hotplaces = self._rank_hotplaces(hotplaces, request)
 
         if self.log_full_kakao_results:
             mapped_hotplaces = [
@@ -958,6 +1382,8 @@ class RecommendationService:
                     "photo_count": len(hotplace.photo_urls),
                     "naver_rating": hotplace.naver_rating,
                     "naver_rating_count": hotplace.naver_rating_count,
+                    "ranking_score": hotplace.ranking_score,
+                    "ranking_reasons": hotplace.ranking_reasons,
                 }
                 for hotplace in hotplaces
             ]
@@ -996,6 +1422,7 @@ class RecommendationService:
                 executed_keyword_count=len(applied_keywords),
                 expected_kakao_api_call_count=expected_kakao_calls,
                 actual_kakao_api_call_count=actual_kakao_calls,
+                ranking_weather_key=normalized_weather_key,
                 cache_hit=False,
                 cache_backend=cache_backend,
                 cache_ttl_seconds=self.cache_ttl_seconds,

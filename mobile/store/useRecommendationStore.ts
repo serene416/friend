@@ -45,6 +45,19 @@ const toOptionalPositiveInt = (value: unknown): number | null => {
   return normalized > 0 ? normalized : null;
 };
 
+const toOptionalRankingScore = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return Math.round(value * 10000) / 10000;
+};
+
 const normalizePhotoCollectionStatus = (
   value: unknown
 ): 'PENDING' | 'READY' | 'EMPTY' | 'FAILED' => {
@@ -64,6 +77,17 @@ const normalizePhotoCollectionReason = (value: unknown): string | null => {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+};
+
+const normalizeRankingReasons = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((reason): reason is string => typeof reason === 'string')
+    .map((reason) => reason.trim())
+    .filter((reason) => reason.length > 0)
+    .slice(0, 3);
 };
 
 const normalizeCoordinate = (value?: Coordinate | null): Coordinate | null => {
@@ -114,6 +138,8 @@ const normalizeHotplace = (hotplace: MidpointHotplace): MidpointHotplace => {
     naver_rating_count: toOptionalPositiveInt(hotplace.naver_rating_count),
     photo_collection_status: photoUrls.length > 0 ? 'READY' : photoCollectionStatus,
     photo_collection_reason: normalizePhotoCollectionReason(hotplace.photo_collection_reason),
+    ranking_score: toOptionalRankingScore(hotplace.ranking_score),
+    ranking_reasons: normalizeRankingReasons(hotplace.ranking_reasons),
   };
 };
 

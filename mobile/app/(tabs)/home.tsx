@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,6 +22,7 @@ import {
   getDistanceKmFromCurrentLocation,
   mapSourceKeywordToPlayCategory,
   metersToKm,
+  PLAY_CATEGORIES,
 } from '../../utils/recommendation';
 
 interface HotplaceCardItem {
@@ -38,6 +40,7 @@ interface HotplaceCardItem {
 }
 
 type HomeCardItem = (Activity & { kind: 'mock' }) | HotplaceCardItem;
+type PlayCategoryFilter = (typeof PLAY_CATEGORIES)[number];
 
 const WEATHER_THEMES: Record<string, { bg: string; text: string; border?: string }> = {
   맑음: { bg: '#81CFEF', text: '#FFFFFF' },
@@ -76,6 +79,7 @@ export default function HomeScreen() {
   const { toggleFavorite, isFavorite, favorites } = useFavoriteStore();
   const { selectedFriends } = useFriendStore();
   const [showFavoritePopup, setShowFavoritePopup] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<PlayCategoryFilter | null>(null);
   const recommendation = useRecommendationStore((state) => state.recommendation);
 
   const isNoPrecipitation = data?.precipitationType === '없음';
@@ -136,10 +140,16 @@ export default function HomeScreen() {
     }
 
     const sortedHotplaces = [...recommendation.hotplaces].sort((a, b) => {
-      const aHasPhoto = Boolean(a.representative_image_url || a.photo_urls?.length);
-      const bHasPhoto = Boolean(b.representative_image_url || b.photo_urls?.length);
-      if (aHasPhoto !== bHasPhoto) {
-        return aHasPhoto ? -1 : 1;
+      const aRankingScore = typeof a.ranking_score === 'number' ? a.ranking_score : null;
+      const bRankingScore = typeof b.ranking_score === 'number' ? b.ranking_score : null;
+      if (aRankingScore !== null && bRankingScore !== null && aRankingScore !== bRankingScore) {
+        return bRankingScore - aRankingScore;
+      }
+      if (aRankingScore !== null && bRankingScore === null) {
+        return -1;
+      }
+      if (aRankingScore === null && bRankingScore !== null) {
+        return 1;
       }
 
       const aDistance = getDistanceKmFromCurrentLocation(a, recommendation.currentLocation) ?? metersToKm(a.distance);
@@ -184,7 +194,14 @@ export default function HomeScreen() {
     });
   }, [recommendation]);
 
-  const recommendationItems = selectedFriends.length > 0 ? hotplaceItems : [];
+  const filteredHotplaceItems = useMemo(() => {
+    if (!selectedCategory) {
+      return hotplaceItems;
+    }
+    return hotplaceItems.filter((item) => item.category === selectedCategory);
+  }, [hotplaceItems, selectedCategory]);
+
+  const recommendationItems = selectedFriends.length > 0 ? filteredHotplaceItems : [];
 
   const renderItem = ({ item }: { item: HomeCardItem }) => {
     if (item.kind === 'hotplace') {
@@ -332,6 +349,13 @@ export default function HomeScreen() {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>오늘 누구랑 놀까요? 친구를 선택해보세요! 🥳</Text>
             </View>
+          ) : selectedCategory ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {selectedCategory} 카테고리 추천이 아직 없어요.
+              </Text>
+              <Text style={styles.emptySubText}>다른 카테고리를 선택해보세요.</Text>
+            </View>
           ) : null
         }
         ListHeaderComponent={
@@ -406,13 +430,52 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.selectorContainer}>
-              <FriendSelector currentLocation={data ? { lat: data.latitude, lng: data.longitude } : undefined} />
+              <FriendSelector
+                currentLocation={data ? { lat: data.latitude, lng: data.longitude } : undefined}
+                weatherKey={weatherKey}
+              />
             </View>
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
                 {hotplaceItems.length > 0 ? '위치 기반 추천 활동' : '오늘의 추천 활동'}
               </Text>
+              {selectedFriends.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryFilterScroll}
+                  contentContainerStyle={styles.categoryFilterContent}
+                >
+                  {PLAY_CATEGORIES.map((category) => {
+                    const isSelected = selectedCategory === category;
+                    return (
+                      <TouchableOpacity
+                        key={category}
+                        style={[
+                          styles.categoryChip,
+                          isSelected && styles.categoryChipSelected,
+                        ]}
+                        onPress={() =>
+                          setSelectedCategory((previous) =>
+                            previous === category ? null : category
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            isSelected && styles.categoryChipTextSelected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {category}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
             </View>
           </>
         }
@@ -484,8 +547,47 @@ const styles = StyleSheet.create({
     fontFamily: 'Pretendard-Medium',
   },
   selectorContainer: { marginBottom: 25 },
-  sectionHeader: { marginBottom: 15 },
-  sectionTitle: { fontSize: 20, fontFamily: 'Pretendard-Bold' },
+  sectionHeader: {
+    marginBottom: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontFamily: 'Pretendard-Bold',
+    flexShrink: 0,
+  },
+  categoryFilterScroll: {
+    flex: 1,
+  },
+  categoryFilterContent: {
+    alignItems: 'center',
+    paddingLeft: 4,
+  },
+  categoryChip: {
+    marginLeft: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    backgroundColor: '#F4F4F5',
+  },
+  categoryChipSelected: {
+    borderColor: '#111827',
+    backgroundColor: '#111827',
+  },
+  categoryChipText: {
+    fontSize: 12,
+    color: '#4B5563',
+    fontFamily: 'Pretendard-Medium',
+  },
+  categoryChipTextSelected: {
+    color: '#FFFFFF',
+    fontFamily: 'Pretendard-Bold',
+  },
   listContent: { paddingBottom: 20 },
   card: {
     backgroundColor: '#fff',
@@ -610,6 +712,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#aaa',
+    fontFamily: 'Pretendard-Medium',
+    textAlign: 'center',
+  },
+  emptySubText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#b3b3b3',
     fontFamily: 'Pretendard-Medium',
   },
 });

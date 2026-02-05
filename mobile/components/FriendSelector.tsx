@@ -10,9 +10,10 @@ const BACKEND_URL = getBackendUrl();
 
 interface FriendSelectorProps {
     currentLocation?: { lat: number; lng: number };
+    weatherKey?: string;
 }
 
-export default function FriendSelector({ currentLocation }: FriendSelectorProps) {
+export default function FriendSelector({ currentLocation, weatherKey }: FriendSelectorProps) {
     const { friends, selectedFriends, toggleFriendSelection, loadFriends } = useFriendStore();
     const setRecommendation = useRecommendationStore((state) => state.setRecommendation);
     const user = useAuthStore((state) => state.user);
@@ -102,6 +103,7 @@ export default function FriendSelector({ currentLocation }: FriendSelectorProps)
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     participants: resolvedParticipants,
+                    weather_key: typeof weatherKey === 'string' && weatherKey.trim() ? weatherKey.trim() : undefined,
                 }),
             });
 

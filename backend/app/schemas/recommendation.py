@@ -56,6 +56,7 @@ class MidpointHotplaceRequest(BaseModel):
     keywords: List[str] = Field(default_factory=lambda: ["맛집", "놀거리"], min_length=1)
     size: int = Field(default=15, ge=1, le=15)
     pages: int = Field(default=2, ge=1, le=45)
+    weather_key: Optional[str] = Field(default=None, max_length=16)
 
     @field_validator("keywords")
     @classmethod
@@ -64,6 +65,14 @@ class MidpointHotplaceRequest(BaseModel):
         if not normalized:
             raise ValueError("keywords must contain at least one non-empty value")
         return normalized
+
+    @field_validator("weather_key")
+    @classmethod
+    def validate_weather_key(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class Midpoint(BaseModel):
@@ -102,6 +111,8 @@ class MidpointHotplace(BaseModel):
     naver_rating_count: Optional[int] = None
     photo_collection_status: Literal["PENDING", "READY", "EMPTY", "FAILED"] = "PENDING"
     photo_collection_reason: Optional[str] = None
+    ranking_score: Optional[float] = None
+    ranking_reasons: List[str] = Field(default_factory=list)
 
 
 class MidpointHotplaceMeta(BaseModel):
@@ -119,6 +130,7 @@ class MidpointHotplaceMeta(BaseModel):
     executed_keyword_count: int
     expected_kakao_api_call_count: int
     actual_kakao_api_call_count: int
+    ranking_weather_key: Optional[str] = None
     cache_hit: bool = False
     cache_backend: str = "memory"
     cache_ttl_seconds: int = 900
