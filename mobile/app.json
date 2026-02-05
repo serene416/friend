@@ -2,7 +2,7 @@
   "expo": {
     "name": "오늘 뭐할까",
     "slug": "today-what-to-do",
-    "owner": "appletree30",
+    "owner": "serene416",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -51,7 +51,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f4cf53f2-37f0-4f89-9fc9-43c861760152"
+        "projectId": "c1592960-afc7-47fc-9e4b-492cfb8f369b"
       }
     }
   }
