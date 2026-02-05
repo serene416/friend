@@ -1044,26 +1044,6 @@ class RecommendationService:
         )
         return rating_score, confidence_score, bayesian_rating
 
-    @staticmethod
-    def _is_zero_naver_rating(hotplace: MidpointHotplace) -> bool:
-        return hotplace.naver_rating is not None and hotplace.naver_rating <= 0.0
-
-    def _filter_zero_rated_hotplaces(
-        self,
-        hotplaces: list[MidpointHotplace],
-    ) -> list[MidpointHotplace]:
-        if not hotplaces:
-            return hotplaces
-        filtered = [hotplace for hotplace in hotplaces if not self._is_zero_naver_rating(hotplace)]
-        if filtered and len(filtered) < len(hotplaces):
-            logger.info(
-                "Filtered zero-rated hotplaces: filtered=%s total=%s",
-                len(hotplaces) - len(filtered),
-                len(hotplaces),
-            )
-            return filtered
-        return hotplaces
-
     def _calculate_weather_suitability_score(
         self,
         weather_key: str | None,
@@ -1118,9 +1098,6 @@ class RecommendationService:
         hotplaces: list[MidpointHotplace],
         request: MidpointHotplaceRequest,
     ) -> list[MidpointHotplace]:
-        if not hotplaces:
-            return hotplaces
-        hotplaces = self._filter_zero_rated_hotplaces(hotplaces)
         if not hotplaces:
             return hotplaces
 

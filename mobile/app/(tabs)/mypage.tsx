@@ -11,6 +11,8 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useFriendStore } from '../../store/useFriendStore';
 
 const BACKEND_URL = getBackendUrl();
+const GEOCODE_MIN_INTERVAL_MS = 20000;
+const GEOCODE_WARN_INTERVAL_MS = 60000;
 
 function buildLocationLabel(place: Location.LocationGeocodedAddress) {
     const parts = [place.region, place.city, place.district ?? place.subregion]
@@ -39,9 +41,19 @@ export default function MyPageScreen() {
     const [isEditingStatus, setIsEditingStatus] = useState(false);
     const [deletingFriendId, setDeletingFriendId] = useState<string | null>(null);
     const lastSyncedLocationRef = useRef('');
+    const lastReverseGeocodeCellRef = useRef('');
+    const lastResolvedLocationNameRef = useRef<string | undefined>(undefined);
+    const lastReverseGeocodeAtRef = useRef(0);
+    const lastRateLimitWarnAtRef = useRef(0);
+    const isReverseGeocodingRef = useRef(false);
 
     useEffect(() => {
         lastSyncedLocationRef.current = '';
+        lastReverseGeocodeCellRef.current = '';
+        lastResolvedLocationNameRef.current = undefined;
+        lastReverseGeocodeAtRef.current = 0;
+        lastRateLimitWarnAtRef.current = 0;
+        isReverseGeocodingRef.current = false;
     }, [user?.id]);
 
     const syncCurrentLocation = useCallback(
@@ -77,6 +89,54 @@ export default function MyPageScreen() {
         [user?.id]
     );
 
+    const resolveLocationName = useCallback(async (latitude: number, longitude: number) => {
+        const roundedCellKey = `${latitude.toFixed(3)}:${longitude.toFixed(3)}`;
+        const lastResolvedName = lastResolvedLocationNameRef.current;
+        const now = Date.now();
+
+        if (lastReverseGeocodeCellRef.current === roundedCellKey && lastResolvedName) {
+            return lastResolvedName;
+        }
+
+        if (
+            isReverseGeocodingRef.current ||
+            now - lastReverseGeocodeAtRef.current < GEOCODE_MIN_INTERVAL_MS
+        ) {
+            return lastResolvedName;
+        }
+
+        isReverseGeocodingRef.current = true;
+        lastReverseGeocodeAtRef.current = now;
+        try {
+            const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+            if (geocode.length > 0) {
+                const place = geocode[0];
+                const resolved = buildLocationLabel(place) || undefined;
+                if (resolved) {
+                    lastReverseGeocodeCellRef.current = roundedCellKey;
+                    lastResolvedLocationNameRef.current = resolved;
+                    return resolved;
+                }
+            }
+            return lastResolvedName;
+        } catch (error) {
+            const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+            const isRateLimitError =
+                message.includes('rate limit') || message.includes('too many requests');
+            if (isRateLimitError) {
+                if (now - lastRateLimitWarnAtRef.current >= GEOCODE_WARN_INTERVAL_MS) {
+                    console.warn('Reverse geocode rate-limited; reusing previous location label.');
+                    lastRateLimitWarnAtRef.current = now;
+                }
+            } else {
+                console.warn('Reverse geocode failed:', error);
+            }
+            return lastResolvedName;
+        } finally {
+            isReverseGeocodingRef.current = false;
+        }
+    }, []);
+
     useEffect(() => {
         let subscription: Location.LocationSubscription | null = null;
 
@@ -97,22 +157,13 @@ export default function MyPageScreen() {
                         try {
                             const latitude = location.coords.latitude;
                             const longitude = location.coords.longitude;
-                            let resolvedName: string | undefined;
-
-                            const geocode = await Location.reverseGeocodeAsync({
-                                latitude,
-                                longitude,
-                            });
-
-                            if (geocode.length > 0) {
-                                const place = geocode[0];
-                                resolvedName = buildLocationLabel(place) || undefined;
-                            }
-
-                            setLocationName(resolvedName || '위치를 알 수 없음');
+                            const resolvedName = await resolveLocationName(latitude, longitude);
+                            setLocationName((prev) =>
+                                resolvedName || (prev === '위치 정보를 불러오는 중...' ? '위치를 알 수 없음' : prev)
+                            );
                             await syncCurrentLocation(latitude, longitude, resolvedName);
                         } catch (error) {
-                            console.error('Location Watch Callback Error:', error);
+                            console.warn('Location Watch Callback Warning:', error);
                         }
                     }
                 );
@@ -127,7 +178,7 @@ export default function MyPageScreen() {
                 subscription.remove();
             }
         };
-    }, [syncCurrentLocation]);
+    }, [resolveLocationName, syncCurrentLocation]);
 
     const refreshFriends = useCallback(async () => {
         if (!user?.id) {
