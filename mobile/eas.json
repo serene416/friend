@@ -12,7 +12,9 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
-      "credentialsSource": "local",
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://friend-production-a852.up.railway.app"
+      },
       "android": {
         "buildType": "apk"
       }
