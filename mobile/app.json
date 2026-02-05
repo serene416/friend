@@ -10,12 +10,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.appletree30.todaywhattodo",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "현재 위치의 날씨를 보여주기 위해 위치 권한이 필요합니다."
       }
     },
     "android": {
+      "package": "com.appletree30.todaywhattodo",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -45,6 +47,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f4cf53f2-37f0-4f89-9fc9-43c861760152"
+      }
     }
   }
 }
