@@ -369,7 +369,7 @@ class RecommendationServiceTests(unittest.TestCase):
         self.assertEqual(ranked[0].kakao_place_id, "lower-rating-high-reviews")
         self.assertGreater(ranked[0].ranking_score, ranked[1].ranking_score)
 
-    def test_rank_hotplaces_filters_zero_rated_places_when_other_rated_places_exist(self):
+    def test_rank_hotplaces_allows_zero_rating_when_review_count_is_high(self):
         service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
         request = MidpointHotplaceRequest(
             participants=[
@@ -378,27 +378,27 @@ class RecommendationServiceTests(unittest.TestCase):
             ],
             weather_key=None,
         )
-        zero_rating = self._build_hotplace(
-            kakao_place_id="zero-rated",
+        zero_rating_high_reviews = self._build_hotplace(
+            kakao_place_id="zero-rating-high-reviews",
             source_keyword="보드게임카페",
             x=127.0300,
             y=37.5000,
             rating=0.0,
-            rating_count=120,
+            rating_count=2000,
         )
-        positive_rating = self._build_hotplace(
-            kakao_place_id="positive-rated",
+        positive_rating_low_reviews = self._build_hotplace(
+            kakao_place_id="positive-rating-low-reviews",
             source_keyword="보드게임카페",
             x=127.0300,
             y=37.5000,
-            rating=4.1,
-            rating_count=40,
+            rating=4.8,
+            rating_count=8,
         )
 
-        ranked = service._rank_hotplaces([zero_rating, positive_rating], request)
+        ranked = service._rank_hotplaces([positive_rating_low_reviews, zero_rating_high_reviews], request)
 
-        self.assertEqual(len(ranked), 1)
-        self.assertEqual(ranked[0].kakao_place_id, "positive-rated")
+        self.assertEqual(ranked[0].kakao_place_id, "zero-rating-high-reviews")
+        self.assertEqual(len(ranked), 2)
 
     def test_cache_key_changes_when_weather_key_changes(self):
         service = RecommendationService(kakao_local_service=FakeKakaoLocalService())
